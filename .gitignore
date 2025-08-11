@@ -1,6 +1,11 @@
-
-# But not these files...
+##CLUE
 !.gitignore
+
+.ipynb_checkpoints/
+
+##CLUE-CLUST
+
+# Not these files...
 !CLUE-CLUST/pom.xml
 !CLUE-CLUST/README.md
 
