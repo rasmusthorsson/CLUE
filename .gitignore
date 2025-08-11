@@ -1,7 +1,12 @@
 ##CLUE
 !.gitignore
 
-.ipynb_checkpoints/
+CLUE-CORE/.ipynb_checkpoints/
+testfiles/
+*.swp
+
+##CLUE-CORE
+CLUE-CORE/__pycache__
 
 ##CLUE-CLUST
 

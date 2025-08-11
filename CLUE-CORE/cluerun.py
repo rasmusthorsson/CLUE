@@ -147,6 +147,8 @@ class ClueRound:
     metadataFile = None         #File descriptor to direct the metadata results
     featureSelectionFile = None #File descriptor for the feature selection file
     clusterSelectionFile = None #File descriptor for the cluster selection file
+
+    CLUECLUST = None
   
     def __init__(self, 
                  roundName, 
@@ -154,7 +156,9 @@ class ClueRound:
                  directory, 
                  featureSelectionFile, 
                  clusterSelectionFile,
-                 clueConfig):
+                 clueConfig,
+                 CLUECLUST = "../CLUECLUST.jar"
+                 ):
         self.roundName = roundName
         self._round = _round
         self.directory = directory
@@ -168,10 +172,12 @@ class ClueRound:
         self.metadataFile = "metadata" + str(self._round) + ".csv"
         self.inputFile = self.roundDirectory + "input" + str(self._round) + ".csv"
 
+        self.CLUECLUST = CLUECLUST
+
     #Builds the subprocess call based off the configuration of the round
     def buildCall(self):
         #Base call, always the same regardless of config
-        call = ["java", "-jar", "Java-PH/CLUECLUST.jar", "-f", self.inputFile, 
+        call = ["java", "-jar", self.CLUECLUST, "-f", self.inputFile, 
                 "-d", self.roundDirectory, "-output", self.clustersFile,
                 "-metadata", self.metadataFile, "-t", str(self.clueConfig.threads)]
 
