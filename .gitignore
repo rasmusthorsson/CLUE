@@ -1,0 +1,38 @@
+
+# But not these files...
+!.gitignore
+!CLUE-CLUST/pom.xml
+!CLUE-CLUST/README.md
+
+# ...and not these directories...
+!CLUE-CLUST/src/
+!CLUE-CLUST/src/**/*
+!CLUE-CLUST/input_files/*
+
+# Ignore compiled files in the src directory
+CLUE-CLUST/src/**/*.class
+
+# Ignore Maven build directory
+CLUE-CLUST/target/
+
+# Ignore Eclipse files
+CLUE-CLUST/.classpath
+CLUE-CLUST/.project
+CLUE-CLUST/.settings/
+
+# Ignore IntelliJ IDEA files
+CLUE-CLUST.idea/
+CLUE-CLUST/*.iml
+CLUE-CLUST/*.iws
+CLUE-CLUST/*.ipr
+
+# Ignore VS Code files
+CLUE-CLUST/.vscode/
+
+# Ignore Mac system files
+CLUE-CLUST/.DS_Store
+
+# Ignore Windows files
+CLUE-CLUST/Thumbs.db
+CLUE-CLUST/ehthumbs.db
+CLUE-CLUST/Desktop.ini
