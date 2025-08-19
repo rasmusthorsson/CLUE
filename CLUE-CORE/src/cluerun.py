@@ -43,7 +43,7 @@ class ClueConfig:
     minPts = None
     hyperplanes = None
     hashtables = None
-    kclusters = None
+    kClusters = None
     threads = None
 
     #Booleans
@@ -72,7 +72,7 @@ class ClueConfig:
                                                         ]
         self.callDictALG[int(Algorithm.KMEANS)] = [
                                                    "-c", "kmeans", 
-                                                   "-k", str(int(self.kclusters))
+                                                   "-k", str(int(self.kClusters))
                                                    ]
 
         #Distance metric dict
@@ -91,7 +91,7 @@ class ClueConfig:
                  minPts=20,
                  hyperplanes=5,
                  hashtables=10,
-                 kclusters=8,
+                 kClusters=8,
                  standardize=False,
                  useFeatures=False,
                  threads=4,
@@ -104,7 +104,7 @@ class ClueConfig:
         self.minPts=minPts
         self.hyperplanes=hyperplanes
         self.hashtables=hashtables
-        self.kclusters=kclusters
+        self.kClusters=kClusters
         self.standardize = standardize
         self.threads = threads
         self.window = window
@@ -136,7 +136,6 @@ class ClueConfig:
 #An individual round is defined by files connected to that round and a configuration for the subprocess
 class ClueRound:
 
-    _round = None               #Round number in global ordering
     roundName = None            #Name of round
     directory = None            #Base directory of the global run
     roundDirectory = None       #Directory for the round itself
@@ -152,27 +151,39 @@ class ClueRound:
   
     def __init__(self, 
                  roundName, 
-                 _round, 
                  directory, 
                  featureSelectionFile, 
                  clusterSelectionFile,
                  clueConfig,
-                 CLUECLUST = "../CLUECLUST.jar"
+                 CLUECLUST = "CLUECLUST.jar"
                  ):
-        self.roundName = roundName
-        self._round = _round
-        self.directory = directory
-        self.roundDirectory = self.directory + "/" + roundName + "/"
-        self.clueConfig = clueConfig
-        
-        self.featureSelectionFile = featureSelectionFile
-        self.clusterSelectionFile = clusterSelectionFile
-   
-        self.clustersFile = "clusters" + str(self._round) + ".csv"
-        self.metadataFile = "metadata" + str(self._round) + ".csv"
-        self.inputFile = self.roundDirectory + "input" + str(self._round) + ".csv"
+        #Set all round settings
+        self.setRound(roundName, 
+                      directory, 
+                      featureSelectionFile, 
+                      clusterSelectionFile,
+                      clueConfig)
 
         self.CLUECLUST = CLUECLUST
+
+    def setRound(self, 
+                 roundName, 
+                 directory, 
+                 featureSelectionFile, 
+                 clusterSelectionFile, 
+                 clueConfig):
+        #Change all round settings in the given round
+        self.roundName = roundName
+        self.directory = directory
+        self.roundDirectory = str(directory) + "/" + roundName + "/"
+        self.featureSelectionFile = featureSelectionFile
+        self.clusterSelectionFile = clusterSelectionFile
+        self.clueConfig = clueConfig
+
+        #Update file descriptors
+        self.clustersFile = "clusters.csv"
+        self.metadataFile = "metadata.csv"
+        self.inputFile = self.roundDirectory + "input.csv"
 
     #Builds the subprocess call based off the configuration of the round
     def buildCall(self):
@@ -189,7 +200,7 @@ class ClueRound:
     #Special case for building a call using the parameter optimizer
     def runParamOptimizer(self):
         #Base call, always the same regardless of config
-        call = ["java", "-jar", "Java-PH/CLUECLUST.jar", "-f", self.inputFile,
+        call = ["java", "-jar", self.CLUECLUST, "-f", self.inputFile,
                 "-d", self.roundDirectory, "-c", "optimize", "-o", str(int(self.clueConfig.paramOptimization))]
 
         #Generate config-dependent components of call
@@ -218,13 +229,13 @@ class ClueRound:
 
     #Runs the round
     def runRound(self):
-        print("Running round " + str(self._round) + " by name: " + self.roundName + "...\n")
+        print("Running round: " + self.roundName + "...\n")
         print("Target round directory: " + self.roundDirectory + "\n")
         print("Input File: " + self.inputFile + "\n")
         print("Clusters File: " + self.roundDirectory + self.clustersFile + "\n")
         print("Metadata File: " + self.roundDirectory + self.metadataFile + "\n")
-        print("Feature Selection File: " + self.featureSelectionFile + "\n")
-        print("Cluster Selection File: " + self.clusterSelectionFile + "\n")
+        print("Feature Selection File: " + str(self.featureSelectionFile) + "\n")
+        print("Cluster Selection File: " + str(self.clusterSelectionFile) + "\n")
 
         #If param opt is selected we run the parameter optimizer first to set new config parameters
         if (int(self.clueConfig.paramOptimization) > 0):
@@ -249,18 +260,89 @@ class ClueRun:
         self.baseFile = baseFile
         self.targetRunDirectory = targetRunDirectory + "/" + self.runName
         self.outputDirectory = outputDirectory
+        self.interactive = interactive
 
     #For building a round and adding it to the end of the rounds to be ran
     def buildRound(self, roundName, featuresFile, selectionFile, clueConfig):
         self.rounds.append(ClueRound(roundName, 
-                                     len(self.rounds) + 1, 
                                      self.targetRunDirectory, 
                                      featuresFile, 
                                      selectionFile,
                                      clueConfig))
+    
+    def setRound(self, roundName, featureSelectionFile, clusterSelectionFile, clueConfig):
+        #Change all round settings in the given round
+        for round in self.rounds:
+            if (round.roundName == roundName):
+                round.setRound(roundName, 
+                               self.targetRunDirectory, 
+                               featureSelectionFile, 
+                               clusterSelectionFile,
+                               clueConfig)
+                return
+
+    def setCLUECLUST(self, CLUECLUST):
+        #Set the CLUECLUST jar file to be used for all rounds
+        for round in self.rounds:
+            round.CLUECLUST = CLUECLUST
+
+    def moveRoundUp(self, roundName):
+        """ Move a round up in the list of rounds to be ran, if it is not already at the top.
+        """
+        for i in range(1, len(self.rounds)):
+            if (self.rounds[i].roundName == roundName):
+                #Swap with the previous round
+                if (i > 0):
+                    self.rounds[i], self.rounds[i - 1] = self.rounds[i - 1], self.rounds[i]
+                    return
+                else:
+                    print("Round with name " + roundName + " is already at the top, cannot move up.")
+                    return
+        print("Round with name " + roundName + " not found, cannot move up.")
+
+    def moveRoundDown(self, roundName):
+        """ Move a round down in the list of rounds to be ran, if it is not already at the bottom.
+        """
+        for i in range(len(self.rounds) - 1):
+            if (self.rounds[i].roundName == roundName):
+                #Swap with the next round
+                if (i < len(self.rounds) - 1):
+                    self.rounds[i], self.rounds[i + 1] = self.rounds[i + 1], self.rounds[i]
+                    return
+                else:
+                    print("Round with name " + roundName + " is already at the bottom, cannot move down.")
+                    return
+        print("Round with name " + roundName + " not found, cannot move down.")
+        
+        
+    def getRoundIndex(self, roundName):
+        #Get the index of a round by its name
+        for i in range(len(self.rounds)):
+            if (self.rounds[i].roundName == roundName):
+                return i
+        print("Round with name " + roundName + " not found, cannot get index.")
+        return -1
+
+    def getRound(self, roundName):
+        for round in self.rounds:
+            if (round.roundName == roundName):
+                return round
+        return None
+    
+    def removeRound(self, roundName):
+        #Remove a round from the run
+        for i in range(len(self.rounds)):
+            if (self.rounds[i].roundName == roundName):
+                del self.rounds[i]
+                return
+        print("Round with name " + roundName + " not found, cannot remove.")
 
     #Main run function
     def run(self):
+        if (len(self.rounds) == 0):
+            print("No rounds to run, exiting...")
+            return
+        
         Path(self.targetRunDirectory).mkdir(parents=True, exist_ok=True)
         inputDF = pd.read_csv(self.baseFile)
 
@@ -305,7 +387,7 @@ class ClueRun:
             prevRound = currRound
             currRound.runRound()
         
-        targetOutputDirectory = self.targetRunDirectory + "/" + self.outputDirectory
+        targetOutputDirectory = str(self.targetRunDirectory) + "/" + str(self.outputDirectory)
         print("Writing output files to directory: " + targetOutputDirectory + "\n")
         Path(targetOutputDirectory).mkdir(exist_ok=True)
         finalRound = self.rounds[len(self.rounds) - 1]

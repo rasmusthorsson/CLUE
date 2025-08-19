@@ -4,7 +4,8 @@ import tkinter as tk
 import pygubu
 
 PROJECT_PATH = pathlib.Path(__file__).parent
-PROJECT_UI = PROJECT_PATH / "CLUE-GUI.ui"
+PROJECT_UI = PROJECT_PATH / "CLUE-UI.ui"
+ROUND_BUTTON_UI = PROJECT_PATH / "ROUND_BUTTON.ui"
 RESOURCE_PATHS = [PROJECT_PATH]
 
 
@@ -25,7 +26,7 @@ class ClueGuiUI:
         self.builder.add_from_file(PROJECT_UI)
         # Main widget
         self.mainwindow: tk.Toplevel = self.builder.get_object(
-            "Toplevel6", master)
+            "top_level", master)
         # Main menu
         _main_menu = self.builder.get_object("top_menu", self.mainwindow)
         self.mainwindow.configure(menu=_main_menu)

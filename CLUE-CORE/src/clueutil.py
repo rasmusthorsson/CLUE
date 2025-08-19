@@ -145,7 +145,7 @@ class InputFilter:
             metadataDF = pd.read_csv(metadataFD)
             if (clustersDF.empty or metadataDF.empty):
                 print("No clusters found, exiting early...")
-                exit(2)
+                exit(2) #TODO fix this
             if (selectionFD):
                 selectionFile = open(selectionFD)
                 commands = []
@@ -168,33 +168,36 @@ class InputFilter:
 #Constructing graphs from files and rounds
 class ClueGraphing:
 
+    graphs = []
+
     #Plot bands of the mean data for each cluster
-    def __rawBands(clueRound, baseInputFD, baseFeaturesFD):
+    def __rawBands(clueRound, baseInputFD, baseFeaturesFD, ax):
         metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
         averagesColumns = [col for col in metadataDF.columns if col.startswith('Mean')]
         lines = []
         for rowIndex in range(len(metadataDF)):
-            line = plt.plot(metadataDF[averagesColumns].iloc[rowIndex])
+            line = ax.plot(metadataDF[averagesColumns].iloc[rowIndex])
             lines.append(line)
 
         xTicks = []
         for index in range(len(averagesColumns)):
             if (index % 2 == 0):
                 xTicks.append(index)
-        plt.xticks(ticks=xTicks, rotation=45)
-        plt.xlabel("Measurement Timestep")
-        plt.ylabel("Consumption")
+        
+        ax.set_xticks(ticks=xTicks)
+        ax.tick_params(axis='x', rotation=45)
+        ax.set_xlabel("Measurement Timestep")
+        ax.set_ylabel("Consumption")
 
         legendLabels = []
         for index in range(len(lines)):
             legendLabels.append("Cluster " + str(index))
-        plt.legend(legendLabels)
+        ax.legend(legendLabels)
 
     #Plot feature profiles of the raw feature data for each cluster 
-    def __featureProfiles(clueRound, baseInputFD, baseFeaturesFD): #TODO Use feature selection to limit plotted features
+    def __featureProfiles(clueRound, baseInputFD, baseFeaturesFD, ax): #TODO Use feature selection to limit plotted features
         baseFeaturesDF = pd.read_csv(baseFeaturesFD)
         clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile)
-        metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
         filteredFeaturesDF = InputFilter.filter(baseFeaturesDF, 
                                                 clueRound.roundDirectory + clueRound.clustersFile, 
                                                 clueRound.roundDirectory + clueRound.metadataFile, 
@@ -229,17 +232,18 @@ class ClueGraphing:
 
         normalizedAverages = np.transpose(normalizedTransposedAverages) #TODO Do not transpose
         
-        heatmap = plt.imshow(normalizedAverages, cmap="Oranges")
+        heatmap = ax.imshow(normalizedAverages, cmap="Oranges")
         plt.colorbar(heatmap, ticks=[])
-        plt.xticks(ticks=np.arange(len(xAxis)), labels=xAxis, rotation=45)
-        plt.yticks(ticks=np.arange(len(yAxis)), labels=yAxis)
+        ax.set_xticks(ticks=np.arange(len(xAxis)), labels=xAxis)
+        ax.tick_params(axis='x', rotation=45)
+        ax.set_yticks(ticks=np.arange(len(yAxis)), labels=yAxis)
 
-        plt.xlabel("Feature")
-        plt.ylabel("Cluster")
+        ax.set_xlabel("Feature")
+        ax.set_ylabel("Cluster")
         
         for column in range(len(clusterFeatureAverages)):
             for row in range(len(clusterFeatureAverages[column])):
-                plt.text(row, 
+                ax.text(row, 
                          column, 
                          round(clusterFeatureAverages[column][row], 2), 
                          ha="center", 
@@ -263,12 +267,11 @@ class ClueGraphing:
             return
         if (directOutput):
             plt.ioff()
-        for graphIndex in range(0, len(ClueGraphing.__graphDict.values())):
-            plt.figure(graphIndex + 1)
-            list(ClueGraphing.__graphDict.values())[graphIndex](clueRound, baseInputFD, baseFeaturesFD)
-        for graphIndex in range(0, len(ClueGraphing.__graphDict.keys())):
-            plt.figure(graphIndex + 1)
-            if (directOutput):
-                plt.show()
-            else:
+        for graphIndex, graphFunction in enumerate(ClueGraphing.__graphDict.values()):
+            fig, ax = plt.subplots()
+            graphFunction(clueRound, baseInputFD, baseFeaturesFD, ax)
+            ClueGraphing.graphs.append((fig, ax))
+            if (outputDirectory):
                 plt.savefig(outputDirectory + "/" + list(ClueGraphing.__graphDict.keys())[graphIndex] + ".png")
+            else:
+                print("No output directory specified, skipping saving of graph " + list(ClueGraphing.__graphDict.keys())[graphIndex])
