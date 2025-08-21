@@ -1,11 +1,13 @@
-from pathlib import Path
-
 import sys
 import random
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+
+#Base class for exceptions in CLUE
+class ClueException(Exception):
+    pass
 
 #Utility class for extracting features from the raw data
 class FeatureExtractor:
@@ -54,10 +56,10 @@ class FeatureExtractor:
 
 #Add name of feature and method name in __featuresDict.
     __featuresDict = {
-            "peakHour" : __peakHour,
-            "peakHourVal" : __peakHourVal,
-            "baseHour" : __baseHour,
-            "baseHourVal" : __baseHourVal
+            "Peak Hour" : __peakHour,
+            "Peak Value" : __peakHourVal,
+            "Base Hour" : __baseHour,
+            "Base Value" : __baseHourVal
         } 
 
 #-----------------------------------------------------------
@@ -107,8 +109,7 @@ class InputFilter:
                 filteredDF = filteredDF.drop(map(int, command[1].split(',')), errors='ignore')
 
         if (len(filteredDF) < 1):
-            print("No clusters remain after filtering out unwanted clusters, exiting prematurely..")
-            sys.exit(2)
+            raise ClueException("No clusters remain after filtering out unwanted clusters")
         return filteredDF
 
     #Filters out the non-selected features from the features file and removes IDs not part of the parsed cluster
@@ -144,8 +145,7 @@ class InputFilter:
             clustersDF = pd.read_csv(clustersFD, header=None)
             metadataDF = pd.read_csv(metadataFD)
             if (clustersDF.empty or metadataDF.empty):
-                print("No clusters found, exiting early...")
-                exit(2) #TODO fix this
+                raise ClueException("Clusters or metadata file is empty, cannot filter input")
             if (selectionFD):
                 selectionFile = open(selectionFD)
                 commands = []
@@ -168,7 +168,9 @@ class InputFilter:
 #Constructing graphs from files and rounds
 class ClueGraphing:
 
-    graphs = []
+    graphs = {}
+
+#---------------------------- Graphing Methods ----------------------------
 
     #Plot bands of the mean data for each cluster
     def __rawBands(clueRound, baseInputFD, baseFeaturesFD, ax):
@@ -227,7 +229,12 @@ class ClueGraphing:
         #Normalize features in order to generate the heatmap itself, this allows each column to have a fair color scheme
         for average in np.transpose(clusterFeatureAverages):
             offset = random.uniform(0.1, 0.2)
-            normalizedAverage = (average - np.min(average))/np.ptp(average) + offset
+            rng = np.ptp(average)
+            if rng == 0:  # Avoid division by zero
+                normalizedAverage = np.full_like(average, offset)
+            else:
+                # Normalize the average values to the range [0, 1] and add an offset
+                normalizedAverage = (average - np.min(average)) / rng + offset
             normalizedTransposedAverages.append(normalizedAverage)
 
         normalizedAverages = np.transpose(normalizedTransposedAverages) #TODO Do not transpose
@@ -250,11 +257,14 @@ class ClueGraphing:
                          va="center", 
                          color="black")
 
+
     #Add new plots here
     __graphDict = {
-        "rawBands" : __rawBands,
-        "featureProfiles" : __featureProfiles
+        "Mean Raw Data" : __rawBands,
+        "Feature Profiles" : __featureProfiles
         }
+
+#-------------------------------------------------------------------------------
 
     def __init__(self):
         pass
@@ -262,15 +272,16 @@ class ClueGraphing:
     #Generates all plots specified in __graphDict
     @staticmethod
     def generateGraphs(clueRound, baseInputFD, baseFeaturesFD, outputDirectory=None, directOutput=False):
+        if (len(pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile, header=0)) == 0):
+            raise ClueException("Metadata file is empty")
         if (not directOutput and not outputDirectory):
-            print("In order to generate graphs, please select an outputDirectory or set directOutput to True")
-            return
+            raise ClueException("In order to generate graphs, please select an outputDirectory or set directOutput to True")
         if (directOutput):
             plt.ioff()
         for graphIndex, graphFunction in enumerate(ClueGraphing.__graphDict.values()):
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(constrained_layout=True)
             graphFunction(clueRound, baseInputFD, baseFeaturesFD, ax)
-            ClueGraphing.graphs.append((fig, ax))
+            ClueGraphing.graphs[list(ClueGraphing.__graphDict.keys())[graphIndex]] = fig
             if (outputDirectory):
                 plt.savefig(outputDirectory + "/" + list(ClueGraphing.__graphDict.keys())[graphIndex] + ".png")
             else:
