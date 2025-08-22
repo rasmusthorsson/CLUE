@@ -7,7 +7,7 @@ import threading
 
 import pandas as pd
 
-import clueutil
+from core import clueutil
 
 #TODO Fix bug where one line is lost every clue round
 

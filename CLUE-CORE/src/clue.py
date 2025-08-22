@@ -7,10 +7,9 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import filedialog
 
-import cluerun
-import clueutil
-from clueui import ClueGuiUI
-import clueuiui
+from core import cluerun, clueutil
+from ui import clueuiui
+from ui.clueuiui import ClueGuiUI
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
