@@ -3,6 +3,8 @@
 
 CLUE-CORE/.ipynb_checkpoints/
 testfiles/
+Demo/
+.vscode/
 *.swp
 
 ##CLUE-CORE

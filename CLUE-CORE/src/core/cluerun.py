@@ -1,13 +1,14 @@
 from enum import IntEnum
 
+import os
 import subprocess
 from pathlib import Path
 import shutil
-import threading
 
 import pandas as pd
 
 from core import clueutil
+from core.clueutil import ClueLogger as Logger
 
 #TODO Fix bug where one line is lost every clue round
 
@@ -142,9 +143,9 @@ class ClueRound:
     inputFile = None            #File descriptor to the file containing the input data for the clustering round
     clustersFile = None         #File descriptor to direct the clustering results
     metadataFile = None         #File descriptor to direct the metadata results
-    featureSelectionFile = None #File descriptor for the feature selection file
-    clusterSelectionFile = None #File descriptor for the cluster selection file
-  
+    featureSelectionFile = ""   #File descriptor for the feature selection file
+    clusterSelectionFile = ""   #File descriptor for the cluster selection file
+
     def __init__(self, 
                  roundName, 
                  directory, 
@@ -168,8 +169,8 @@ class ClueRound:
         self.roundName = roundName
         self.directory = directory
         self.roundDirectory = str(directory) + "/" + roundName + "/"
-        self.featureSelectionFile = featureSelectionFile
-        self.clusterSelectionFile = clusterSelectionFile
+        self.featureSelectionFile = featureSelectionFile or ""
+        self.clusterSelectionFile = clusterSelectionFile or ""
         self.clueConfig = clueConfig
 
         #TODO Fix inconsistency in managing file descriptors
@@ -178,7 +179,7 @@ class ClueRound:
         self.inputFile = self.roundDirectory + "input.csv"
     
     #Update the round directory to a new directory
-    def updateRoundDirectory(self, directory):
+    def updateDirectory(self, directory):
         self.directory = directory
         self.roundDirectory = str(directory) + "/" + self.roundName + "/"
         self.inputFile = self.roundDirectory + "input.csv"
@@ -206,7 +207,7 @@ class ClueRound:
 
         subprocess.run(call)
         
-        print("Reading best parameter optimization values...")
+        Logger.log("Reading best parameter optimization values...")
         paramOptFD = self.roundDirectory + "optimal_params.csv"
         paramOptDF = pd.read_csv(paramOptFD, header=0)
         if (len(paramOptDF) > 0):
@@ -218,39 +219,37 @@ class ClueRound:
         else:
             raise clueutil.ClueException("Could not find any parameter combinations within acceptable quality range")
         
-        print("Best values found to be: \n")
-        print("Epsilon = " + str(self.clueConfig.epsilon) + "\n")
-        print("MinPts = " + str(self.clueConfig.minPts) + "\n")
-        print("HashTables = " + str(self.clueConfig.hashtables) + "\n")
-        print("Hyperplanes = " + str(self.clueConfig.hyperplanes) + "\n")
+        Logger.log("Best values found to be: \n")
+        Logger.log("Epsilon = " + str(self.clueConfig.epsilon) + "\n")
+        Logger.log("MinPts = " + str(self.clueConfig.minPts) + "\n")
+        Logger.log("HashTables = " + str(self.clueConfig.hashtables) + "\n")
+        Logger.log("Hyperplanes = " + str(self.clueConfig.hyperplanes) + "\n")
 
     #Runs the round with a specified CLUECLUST jar file
     def runRound(self, CLUECLUST):
-        print("Running round: " + self.roundName + "...")
-        print("Using CLUECLUST jar file: " + CLUECLUST)
-        print("Target round directory: " + self.roundDirectory)
-        print("Input File: " + self.inputFile)
-        print("Clusters File: " + self.roundDirectory + self.clustersFile)
-        print("Metadata File: " + self.roundDirectory + self.metadataFile)
-        print("Feature Selection File: " + str(self.featureSelectionFile))
-        print("Cluster Selection File: " + str(self.clusterSelectionFile))
+        Logger.log("Running round: " + self.roundName + "...")
+        Logger.log("Using CLUECLUST jar file: " + CLUECLUST)
+        Logger.log("Target round directory: " + self.roundDirectory)
+        Logger.log("Input File: " + self.inputFile)
+        Logger.log("Clusters File: " + self.roundDirectory + self.clustersFile)
+        Logger.log("Metadata File: " + self.roundDirectory + self.metadataFile)
+        Logger.log("Feature Selection File: " + str(self.featureSelectionFile))
+        Logger.log("Cluster Selection File: " + str(self.clusterSelectionFile))
 
         #If param opt is selected we run the parameter optimizer first to set new config parameters
         if (int(self.clueConfig.paramOptimization) > 0):
-            print("Running parameter optimizer with level: " + str(int(self.clueConfig.paramOptimization)) + "\n")
+            Logger.log("Running parameter optimizer with level: " + str(int(self.clueConfig.paramOptimization)) + "\n")
             self.runParamOptimizer(CLUECLUST)
         
         call = self.buildCall(CLUECLUST)
+
         proc = subprocess.run(call, 
-                              stdout=subprocess.PIPE, 
-                              stderr=subprocess.STDOUT, 
-                              text=True,
-                              bufsize=1)
-        
-        #When running using the UI, the output must be printed to the cosnsole for visibility
-        if threading.current_thread() is not threading.main_thread():
-            for line in proc.stdout.splitlines():
-                print(line + "\n", end="", flush=True)
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.STDOUT, 
+                    text=True,
+                    bufsize=1)
+        for line in proc.stdout.splitlines():
+            Logger.log(line + "\n", end="", flush=True)
 
 #A full run of Clue
 class ClueRun:
@@ -259,18 +258,21 @@ class ClueRun:
     baseFile = None                 #Base input file, raw data
     baseFeaturesFile = None         #Base file containing features, does not need to exist prior to running, will be created in run directory
     targetRunDirectory = None       #Run directory
+    baseDirectory = None            #Base directory
     outputDirectory = None          #Output directory for the final results, will be created if it does not exist
     interactive = None              #If false, will display graphs directly instead of saving them to a file
     CLUECLUST = None                #Path to the CLUECLUST jar file, must be set before running
 
 
-    def __init__(self, runName, baseFile, targetRunDirectory, outputDirectory="output", interactive=False, CLUECLUST="CLUECLUST.jar"):
+    def __init__(self, runName, baseFile, baseDirectory, outputDirectory="output", interactive=False, CLUECLUST="CLUECLUST.jar"):
         self.runName = runName
         self.baseFile = baseFile
-        self.targetRunDirectory = targetRunDirectory + "/" + self.runName
+        self.baseDirectory = baseDirectory
         self.outputDirectory = outputDirectory
         self.interactive = interactive
         self.CLUECLUST = CLUECLUST
+
+        self.targetRunDirectory = self.baseDirectory + "/" + self.runName
 
     #For building a round and adding it to the end of the rounds to be ran
     def buildRound(self, roundName, featuresFile, selectionFile, clueConfig):
@@ -286,24 +288,25 @@ class ClueRun:
         for round in self.rounds:
             if (round.roundName == roundName):
                 round.setRound(roundName, 
-                               self.targetRunDirectory, 
+                               self.targetRunDirectory,
                                featureSelectionFile, 
                                clusterSelectionFile,
                                clueConfig)
                 return
-            
-    #Update the target run directory to a new directory after directory change
-    def updateTargetRunDirectory(self, targetRunDirectory):
-        self.targetRunDirectory = targetRunDirectory + "/" + self.runName
+
+    #Update the base directory to a new directory after directory change
+    def updateBaseDirectory(self, baseDirectory):
+        self.baseDirectory = baseDirectory
+        self.targetRunDirectory = self.baseDirectory + "/" + self.runName
         for round in self.rounds:
-            round.updateRoundDirectory(self.targetRunDirectory)
+            round.updateDirectory(self.targetRunDirectory)
 
     #Update the target run directory to a new directory after run name change
     def updateRunName(self, runName):
         self.runName = runName
-        self.targetRunDirectory = str(self.targetRunDirectory) + "/" + runName
+        self.targetRunDirectory = self.baseDirectory + "/" + self.runName
         for round in self.rounds:
-            round.updateRoundDirectory(self.targetRunDirectory)
+            round.updateDirectory(self.targetRunDirectory)
 
     #Moves a round up in the listst of rounds to be ran, if it is not already at the top.
     def moveRoundUp(self, roundName):
@@ -341,8 +344,8 @@ class ClueRun:
         for round in self.rounds:
             if (round.roundName == roundName):
                 return round
-        raise clueutil.ClueException("Round with name " + roundName + " not found, cannot get round.")
-    
+        return None
+        
     #Remove a round by its name
     def removeRound(self, roundName):
         #Remove a round from the run
@@ -360,21 +363,23 @@ class ClueRun:
         Path(self.targetRunDirectory).mkdir(parents=True, exist_ok=True)
         inputDF = pd.read_csv(self.baseFile)
 
-        print("Building base features file...")
+        Logger.log("Building base features file...")
         self.baseFeaturesFile = self.targetRunDirectory + "/baseFeatures.csv"
         baseFeaturesDF = clueutil.FeatureExtractor.extractFromDataFrame(inputDF)
         baseFeaturesDF.to_csv(self.baseFeaturesFile, index=False)
-        print("baseFeatures file written to " + self.baseFeaturesFile)
+        Logger.log("baseFeatures file written to " + self.baseFeaturesFile)
        
+        if (not os.path.exists(self.CLUECLUST)):
+            raise clueutil.ClueException("CLUECLUST jar file not found at: " + self.CLUECLUST)
         #First round is ran without any cluster, metadata, or cluster selection files.
         currentDF = inputDF
         if (self.rounds[0].clueConfig.useFeatures): 
             currentDF = baseFeaturesDF
+        Logger.log("Filtering input data for round: " + self.rounds[0].roundName + "...")
         newInputs = clueutil.InputFilter.filter(currentDF, 
                                                 None, #No previous metadata FD
                                                 None, #No previous clusters FD
-                                                self.rounds[0].
-                                                featureSelectionFile, 
+                                                self.rounds[0].featureSelectionFile, 
                                                 None  #No cluster selection file for first round
                                        ) 
         Path(self.rounds[0].roundDirectory).mkdir(exist_ok=True) #Build round directory
@@ -390,6 +395,7 @@ class ClueRun:
                 currentDF = baseFeaturesDF
             prevMetadataFD = prevRound.roundDirectory + prevRound.metadataFile
             prevClustersFD = prevRound.roundDirectory + prevRound.clustersFile
+            Logger.log("Filtering input data for round: " + currRound.roundName + "...")
             newInputs = clueutil.InputFilter.filter(currentDF, 
                                                     prevClustersFD, 
                                                     prevMetadataFD, 
@@ -401,16 +407,16 @@ class ClueRun:
             prevRound = currRound
             currRound.runRound(self.CLUECLUST)
         
-        targetOutputDirectory = str(self.targetRunDirectory) + "/" + str(self.outputDirectory)
-        print("Writing output files to directory: " + targetOutputDirectory + "\n")
-        Path(targetOutputDirectory).mkdir(exist_ok=True)
+        outputWriteDirectory = str(self.targetRunDirectory) + "/" + str(self.outputDirectory)
+        Logger.log("Writing output files to directory: " + outputWriteDirectory + "\n")
+        Path(outputWriteDirectory).mkdir(exist_ok=True)
         finalRound = self.rounds[len(self.rounds) - 1]
-        print("Final round name: " + finalRound.roundName)
-        print("Copying final round clusters file...")
-        shutil.copy(finalRound.roundDirectory + finalRound.clustersFile, targetOutputDirectory + "/clusters_output.csv")
-        print("Copying final round metadata file...")
-        shutil.copy(finalRound.roundDirectory + finalRound.metadataFile, targetOutputDirectory + "/metadata_output.csv")
-        #print("Generating graphs from final round data...")
+        Logger.log("Final round name: " + finalRound.roundName)
+        Logger.log("Copying final round clusters file...")
+        shutil.copy(finalRound.roundDirectory + finalRound.clustersFile, outputWriteDirectory + "/clusters_output.csv")
+        Logger.log("Copying final round metadata file...")
+        shutil.copy(finalRound.roundDirectory + finalRound.metadataFile, outputWriteDirectory + "/metadata_output.csv")
+        #Logger.log("Generating graphs from final round data...")
         #clueutil.ClueGraphing.generateGraphs(finalRound, 
         #                                     self.baseFile, 
         #                                     self.baseFeaturesFile, 

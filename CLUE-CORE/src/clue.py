@@ -7,12 +7,14 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import filedialog
 
-from core import cluerun, clueutil
+from core import cluerun, clueutil, clueserializer
+from core.clueutil import ClueLogger as Logger
 from ui import clueuiui
 from ui.clueuiui import ClueGuiUI
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
+import matplotlib.pyplot as plt
 
 class ClueGui(ClueGuiUI):
 
@@ -25,20 +27,23 @@ class ClueGui(ClueGuiUI):
         Show an error popup with the given title and message.
     """
     def __errorPopup(self, title, message):
-        error_popup = tk.Toplevel(self.mainwindow)
-        error_popup.title(title)
-        error_popup.grab_set()
-        error_popup.focus_force()
-        error_popup.columnconfigure(0, weight=1)
-        error_popup.rowconfigure(0, weight=1)
-        error_popup.geometry("500x300")
-        tk.Label(error_popup, text=message).grid(row=0, column=0, padx=10, pady=10)
-        tk.Button(error_popup, text="OK", command=error_popup.destroy).grid(row=1, column=0, padx=10, pady=10)
+        errorPopup = tk.Toplevel(self.mainwindow)
+        errorPopup.title(title)
+        errorPopup.grab_set()
+        errorPopup.focus_force()
+        errorPopup.columnconfigure(0, weight=1)
+        errorPopup.rowconfigure(0, weight=1)
+        tk.Label(errorPopup, text=message).grid(row=0, column=0, padx=10, pady=10)
+        tk.Button(errorPopup, text="OK", command=errorPopup.destroy).grid(row=1, column=0, padx=10, pady=10)
+        errorPopup.update_idletasks()
+        width = errorPopup.winfo_reqwidth()
+        height = errorPopup.winfo_reqheight()
+        errorPopup.geometry(f"{width}x{height}")
 
     """
         Open a file dialog to choose a file and set the entry widget's value to the selected file path.
     """
-    def __chooseFile(entryWidget, popupWindow):
+    def __chooseFile(self, entryWidget, popupWindow):
         filePath = tk.filedialog.askopenfilename(
             parent=popupWindow,
             title="Select Features File",
@@ -179,15 +184,15 @@ class ClueGui(ClueGuiUI):
         selectionFileButton.grid(row=2, column=2, padx=5, pady=5, sticky="ew")
 
         # Callback when user clicks "OK"
-        def on_ok():
+        def onOk():
 
             # Grab values from the UI elements
-            name = roundnameVar.get() or f"Round {len(self.roundsDict) + 1}"
-            featureFile = str(featuresFileEntry.get()) or None
-            selectionFile = str(selectionFileEntry.get()) or None
+            name = roundnameVar.get() or f"Round {self.roundCount + 1}"
+            featureFile = str(featuresFileEntry.get()) or ""
+            selectionFile = str(selectionFileEntry.get()) or ""
             algorithm = cluerun.Algorithm(chosenAlgorithm.current() + 1) or cluerun.Algorithm(currentAlgorithm)
             distanceMetric = cluerun.DistanceMetric(chosenMetric.current() + 1) or cluerun.DistanceMetric(currentMetric)
-            paramOptimization = cluerun.ParameterOptimizationLevel(paramOptLevel.current()) or cluerun.ParameterOptimizationLevel(currentParamOpt)
+            paramOptimization = cluerun.ParameterOptimizationLevel(paramOptLevel.current())
             epsilon = epsilonVar.get() or currentEpsilon
             minPts = minPtsVar.get() or currentMinPts
             hyperplanes = hyperplanesVar.get() or currentHyperplanes
@@ -218,26 +223,27 @@ class ClueGui(ClueGuiUI):
                             useFeatures=useFeatures
                         )
                     )
+                    self.roundCount += 1
                     
                     # Define the callback function for the round button click
                     def roundClick():
-                        #Grab values from dictionary and print them
+                        #Grab values from dictionary and Logger.log them
                         clueRound = self.clueRun.getRound(name)
                         clueConfig = clueRound.clueConfig
-                        print(f"Round Name: {clueRound.roundName}")
-                        print(f"Algorithm: {clueConfig.algorithm}")
-                        print(f"Distance Metric: {clueConfig.distanceMetric}")
-                        print(f"Parameter Optimization: {clueConfig.paramOptimization}")
-                        print(f"Epsilon: {clueConfig.epsilon}")
-                        print(f"MinPts: {clueConfig.minPts}")
-                        print(f"Hyperplanes: {clueConfig.hyperplanes}")
-                        print(f"Hashtables: {clueConfig.hashtables}")
-                        print(f"KClusters: {clueConfig.kClusters}")
-                        print(f"Threads: {clueConfig.threads}")
-                        print(f"Standardize: {clueConfig.standardize}")
-                        print(f"Use Features: {clueConfig.useFeatures}")
-                        print(f"Features File: {clueRound.featureSelectionFile}")
-                        print(f"Selection File: {clueRound.clusterSelectionFile}")
+                        Logger.log(f"Round Name: {clueRound.roundName}")
+                        Logger.log(f"Algorithm: {clueConfig.algorithm}")
+                        Logger.log(f"Distance Metric: {clueConfig.distanceMetric}")
+                        Logger.log(f"Parameter Optimization: {clueConfig.paramOptimization}")
+                        Logger.log(f"Epsilon: {clueConfig.epsilon}")
+                        Logger.log(f"MinPts: {clueConfig.minPts}")
+                        Logger.log(f"Hyperplanes: {clueConfig.hyperplanes}")
+                        Logger.log(f"Hashtables: {clueConfig.hashtables}")
+                        Logger.log(f"KClusters: {clueConfig.kClusters}")
+                        Logger.log(f"Threads: {clueConfig.threads}")
+                        Logger.log(f"Standardize: {clueConfig.standardize}")
+                        Logger.log(f"Use Features: {clueConfig.useFeatures}")
+                        Logger.log(f"Features File: {clueRound.featureSelectionFile}")
+                        Logger.log(f"Selection File: {clueRound.clusterSelectionFile}")
 
                         # Create a new popup window when the round button is clicked to allow for editing
                         self.buildRoundPopup(
@@ -257,16 +263,16 @@ class ClueGui(ClueGuiUI):
                             currentRoundName=name
                         )
 
-                    # Create the new round button in rounds_frame
-                    new_round_button = tk.Button(
-                        self.rounds_frame,
+                    # Create the new round button in roundsFrame
+                    newRoundButton = tk.Button(
+                        self.roundsFrame,
                         text=f"{name}", 
                         command=roundClick
                     )
-                    self.roundsDict[name] = new_round_button
-                    _, current_rows = self.rounds_frame.grid_size()
-                    new_round_button.grid(row=current_rows, column=0, sticky="ew", pady=5)
-                    self.rounds_frame.grid_columnconfigure(0, weight=1)
+                    self.roundsDict[name] = newRoundButton
+                    _, currentRows = self.roundsFrame.grid_size()
+                    newRoundButton.grid(row=currentRows, column=0, sticky="ew", pady=5)
+                    self.roundsFrame.grid_columnconfigure(0, weight=1)
                 else:
                     # If the name is already in the roundsDict, show an error
                     self.__errorPopup("Round Exists", f"Round '{name}' already exists.")
@@ -300,7 +306,7 @@ class ClueGui(ClueGuiUI):
 
             popup.destroy()
 
-        tk.Button(popup, text="OK", command=on_ok).grid(row=2, column=0, padx=5, pady=10)
+        tk.Button(popup, text="OK", command=onOk).grid(row=2, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=2, column=1, padx=5, pady=10)
 
     """
@@ -313,6 +319,60 @@ class ClueGui(ClueGuiUI):
         
         #Create a popup dialog to configure the round
         self.buildRoundPopup()
+
+    def addExistingRound(self, _round):
+        #Add a round button based on an existing round in the current run without prompting for any settings
+        if self.clueRun is None:
+            self.__errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+
+        if self.clueRun.getRound(_round) is None:
+            self.__errorPopup("Round Not Found", f"Round '{_round}' does not exist.")
+            return
+
+        def roundClick():
+            #Grab values from dictionary and Logger.log them
+            clueRound = self.clueRun.getRound(_round)
+            clueConfig = clueRound.clueConfig
+            Logger.log(f"Round Name: {clueRound.roundName}")
+            Logger.log(f"Algorithm: {clueConfig.algorithm}")
+            Logger.log(f"Distance Metric: {clueConfig.distanceMetric}")
+            Logger.log(f"Parameter Optimization: {clueConfig.paramOptimization}")
+            Logger.log(f"Epsilon: {clueConfig.epsilon}")
+            Logger.log(f"MinPts: {clueConfig.minPts}")
+            Logger.log(f"Hyperplanes: {clueConfig.hyperplanes}")
+            Logger.log(f"Hashtables: {clueConfig.hashtables}")
+            Logger.log(f"KClusters: {clueConfig.kClusters}")
+            Logger.log(f"Threads: {clueConfig.threads}")
+            Logger.log(f"Standardize: {clueConfig.standardize}")
+            Logger.log(f"Use Features: {clueConfig.useFeatures}")
+            Logger.log(f"Features File: {clueRound.featureSelectionFile}")
+            Logger.log(f"Selection File: {clueRound.clusterSelectionFile}")
+
+            self.buildRoundPopup(
+                currentAlgorithm=int(clueConfig.algorithm) - 1,
+                currentMetric=int(clueConfig.distanceMetric) - 1,
+                currentParamOpt=int(clueConfig.paramOptimization),
+                currentEpsilon=clueConfig.epsilon,
+                currentMinPts=clueConfig.minPts,
+                currentHyperplanes=clueConfig.hyperplanes,
+                currentHashtables=clueConfig.hashtables,
+                currentKClusters=clueConfig.kClusters,
+                currentThreads=clueConfig.threads,
+                currentStandardize=clueConfig.standardize,
+                currentUseFeatures=clueConfig.useFeatures,
+                currentFeaturesFile=clueRound.featureSelectionFile or "",
+                currentSelectionFile=clueRound.clusterSelectionFile or "",
+                currentRoundName=_round
+            )
+
+        # Create a button for the existing round
+        self.roundCount += 1
+
+        roundButton = tk.Button(self.roundsFrame, text=_round, command=roundClick)
+        _, currentRows = self.roundsFrame.grid_size()
+        roundButton.grid(row=currentRows, column=0, sticky="ew", pady=5)
+        self.roundsDict[_round] = roundButton
 
     """
         Delete a round from the current run and remove it from the UI.
@@ -355,7 +415,7 @@ class ClueGui(ClueGuiUI):
                 self.clueRun.removeRound(roundName)
                 self.roundsDict[roundName].destroy()
                 del self.roundsDict[roundName]
-                print("Round Deleted", f"Round '{roundName}' has been deleted.")
+                Logger.log("Round Deleted", f"Round '{roundName}' has been deleted.")
             else:
                 self.__errorPopup("Round Not Found", f"Round '{roundName}' does not exist.")
             popup.destroy()  # Close the popup
@@ -397,26 +457,26 @@ class ClueGui(ClueGuiUI):
         roundNameMenu.bind("<<ComboboxSelected>>", lambda e: roundNameVar.set(roundNameMenu.get()))
 
         # Define the callback function for moving the round up
-        def on_move_up():
+        def onMoveUp():
             try:
                 roundName = roundNameVar.get()
-                current_index = self.clueRun.getRoundIndex(roundName)
-                if current_index > 0:
+                currentIndex = self.clueRun.getRoundIndex(roundName)
+                if currentIndex > 0:
                     # Swap the current round with the one above it
-                    above_round_name = list(self.clueRun.rounds)[current_index - 1].roundName
+                    aboveRoundName = list(self.clueRun.rounds)[currentIndex - 1].roundName
                     self.clueRun.moveRoundUp(roundName)
                     
                     # Update the UI
-                    self.roundsDict[roundName].grid(row=current_index - 1, column=0, sticky="ew", pady=5)
-                    self.roundsDict[above_round_name].grid(row=current_index, column=0, sticky="ew", pady=5)
-                    print("Round Moved Up: ", f"Round '{roundName}' has been moved up.")
+                    self.roundsDict[roundName].grid(row=currentIndex - 1, column=0, sticky="ew", pady=5)
+                    self.roundsDict[aboveRoundName].grid(row=currentIndex, column=0, sticky="ew", pady=5)
+                    Logger.log("Round Moved Up: ", f"Round '{roundName}' has been moved up.")
                 else:
                     self.__errorPopup("Already at Top: ", f"Round '{roundName}' is already at the top.")
             except clueutil.ClueException as e:
                 self.__errorPopup("Error Moving Round", str(e))
             popup.destroy()  # Close the popup
-        
-        tk.Button(popup, text="Move Up", command=on_move_up).grid(row=1, column=0, padx=5, pady=10)
+
+        tk.Button(popup, text="Move Up", command=onMoveUp).grid(row=1, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=1, column=1, padx=5, pady=10)
         
     """
@@ -455,28 +515,28 @@ class ClueGui(ClueGuiUI):
         roundNameMenu.bind("<<ComboboxSelected>>", lambda e: roundNameVar.set(roundNameMenu.get())) 
 
         # Define the callback function for moving the round down
-        def on_move_down():
+        def onMoveDown():
             try:
                 roundName = roundNameVar.get()
-                current_index = self.clueRun.getRoundIndex(roundName)
-                if current_index == -1:
+                currentIndex = self.clueRun.getRoundIndex(roundName)
+                if currentIndex == -1:
                     self.__errorPopup("Round Not Found: ", f"Round '{roundName}' does not exist.")
                     return
-                if current_index < len(self.clueRun.rounds) - 1:
-                    below_round_name = list(self.clueRun.rounds)[current_index + 1].roundName
+                if currentIndex < len(self.clueRun.rounds) - 1:
+                    belowRoundName = list(self.clueRun.rounds)[currentIndex + 1].roundName
                     self.clueRun.moveRoundDown(roundName)
                     
                     # Update the UI
-                    self.roundsDict[roundName].grid(row=current_index + 1, column=0, sticky="ew", pady=5)
-                    self.roundsDict[below_round_name].grid(row=current_index, column=0, sticky="ew", pady=5)
-                    print("Round Moved Down: ", f"Round '{roundName}' has been moved down.")
+                    self.roundsDict[roundName].grid(row=currentIndex + 1, column=0, sticky="ew", pady=5)
+                    self.roundsDict[belowRoundName].grid(row=currentIndex, column=0, sticky="ew", pady=5)
+                    Logger.log("Round Moved Down: ", f"Round '{roundName}' has been moved down.")
                 else:
                     self.__errorPopup("Already at Bottom: ", f"Round '{roundName}' is already at the bottom.")
             except clueutil.ClueException as e:
                 self.__errorPopup("Error Moving Round", str(e))
             popup.destroy()
 
-        tk.Button(popup, text="Move Down", command=on_move_down).grid(row=1, column=0, padx=5, pady=10)
+        tk.Button(popup, text="Move Down", command=onMoveDown).grid(row=1, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=1, column=1, padx=5, pady=10)
     
     """
@@ -486,6 +546,7 @@ class ClueGui(ClueGuiUI):
         for _, button in self.roundsDict.items():
             button.destroy()
         self.roundsDict.clear()
+        self.roundCount = 0
 
     """
         Change the label of the run in the UI.
@@ -518,36 +579,36 @@ class ClueGui(ClueGuiUI):
         runNameVar = tk.StringVar(newRunName, value="New Run")
         tk.Entry(newRunName, textvariable=runNameVar).grid(row=0, column=1, padx=5, pady=5)
 
-        def on_ok():
+        def onOk():
             newName = runNameVar.get() or "Run1"
-            input_file = self.builder.get_object("input_file_entry", self.mainwindow).get()
+            inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
             directory = self.builder.get_object("directory_entry", self.mainwindow).get()
-            clueclust_location = self.builder.get_object("clueclust_entry", self.mainwindow).get()
+            clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
             self.clueRun = cluerun.ClueRun(
                 newName,
-                str(input_file),
+                str(inputFile),
                 str(pathlib.Path(directory)),
-                CLUECLUST=str(clueclust_location)
+                CLUECLUST=str(clueclustLocation)
             )
             self.changeRunNameLabel(newName)
-            print("New Run Created:", f"Run '{newName}' has been created.")
+            Logger.log("New Run Created:", f"Run '{newName}' has been created.")
             popup.destroy()
 
-        tk.Button(popup, text="OK", command=on_ok).grid(row=1, column=0, padx=5, pady=10)
+        tk.Button(popup, text="OK", command=onOk).grid(row=1, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=1, column=1, padx=5, pady=10)
 
     """
         Create a tab in the notebook for displaying plots.
     """
     def createPlotTab(self, notebook, fig, name):
-        plot_tab = ttk.Frame(notebook)
-        notebook.add(plot_tab, text=name)
-        
-        fig_canvas = FigureCanvasTkAgg(fig, master=plot_tab) 
-        fig_canvas.draw() 
-        fig_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True) 
+        plotTab = ttk.Frame(notebook)
+        notebook.add(plotTab, text=name)
 
-        toolbar = NavigationToolbar2Tk(fig_canvas, plot_tab)
+        figCanvas = FigureCanvasTkAgg(fig, master=plotTab)
+        figCanvas.draw()
+        figCanvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        toolbar = NavigationToolbar2Tk(figCanvas, plotTab)
         toolbar.update()
         toolbar.pack(side=tk.TOP, fill="both")
 
@@ -574,40 +635,63 @@ class ClueGui(ClueGuiUI):
             if fig is not None:
                 # Create a new tab in the notebook for each figure
                 self.createPlotTab(self.plotNotebook, fig, name)
+                plt.close(fig)
             else:
                 self.__errorPopup("No figure found for graph: ", name)
+
+    def buildExistingRun(self):
+        #Builds all the round buttons and updates all the UI elements to reflect the current state of the run
+        if self.clueRun is None:
+            self.__errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        self.clearRounds()
+        self.changeRunNameLabel(self.clueRun.runName)
+        self.builder.get_object("input_file_entry", self.mainwindow).delete(0, tk.END)
+        self.builder.get_object("input_file_entry", self.mainwindow).insert(0, str(self.clueRun.baseFile))
+        self.builder.get_object("directory_entry", self.mainwindow).delete(0, tk.END)
+        self.builder.get_object("directory_entry", self.mainwindow).insert(0, str(self.clueRun.baseDirectory))
+        self.builder.get_object("clueclust_entry", self.mainwindow).delete(0, tk.END)
+        self.builder.get_object("clueclust_entry", self.mainwindow).insert(0, str(self.clueRun.CLUECLUST))
+        for round in self.clueRun.rounds:
+            self.addExistingRound(round.roundName)
+
     """
         Execute the current CLUE run.
     """
     def runClue(self):
-        print("Running CLUE", "Starting the CLUE run...")
-        self.clueRun.run()
-        self.mainwindow.after(0, self.buildGraphs,
-                          self.clueRun.rounds[len(self.clueRun.rounds) - 1],
-                          self.clueRun.baseFile,
-                          self.clueRun.baseFeaturesFile,
-                          str(self.clueRun.targetRunDirectory) + "/" + self.clueRun.outputDirectory,
-                          True)
-        print("Run Complete", "The CLUE run has completed successfully.")
+        try:
+            Logger.log("Running CLUE: Starting the CLUE run...")
+            self.clueRun.run()
+            self.mainwindow.after(0, self.buildGraphs,
+                            self.clueRun.rounds[len(self.clueRun.rounds) - 1],
+                            self.clueRun.baseFile,
+                            self.clueRun.baseFeaturesFile,
+                            str(self.clueRun.targetRunDirectory) + "/" + self.clueRun.outputDirectory,
+                            True)
+            Logger.log("Run Complete: The CLUE run has completed successfully.")
+        except clueutil.ClueException as e:
+            self.__errorPopup("Clue Run Error", str(e))
+        except Exception as e:
+            self.__errorPopup("Unexpected Error", str(e))
 
     """
         Method called when the run button is clicked. Starts the CLUE run in a separate thread.
     """
-    def runClueButton(self):
+    def runClueButton(self):    
         if self.clueRun is None:
             self.__errorPopup("No run defined", "No run defined, Please create a run first.")
             return
         #Set global run settings before run
-        input_file = self.builder.get_object("input_file_entry", self.mainwindow).get()
-        output_directory = self.builder.get_object("directory_entry", self.mainwindow).get()
-        clueclust_location = self.builder.get_object("clueclust_entry", self.mainwindow).get()
-        if not input_file or not output_directory or not clueclust_location:
+        inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
+        outputDirectory = self.builder.get_object("directory_entry", self.mainwindow).get()
+        clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
+        if not inputFile or not outputDirectory or not clueclustLocation:
             self.__errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
             return
         else:
-            self.clueRun.baseFile = str(input_file)
-            self.clueRun.updateTargetRunDirectory(str(output_directory))
-            self.clueRun.CLUECLUST = str(clueclust_location)
+            self.clueRun.baseFile = str(inputFile)
+            self.clueRun.updateBaseDirectory(str(outputDirectory))
+            self.clueRun.CLUECLUST = str(clueclustLocation)
         threading.Thread(target=self.runClue).start()
 
     """
@@ -620,6 +704,7 @@ class ClueGui(ClueGuiUI):
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
         )
         if filePath:
+            self.clueRun.baseFile = str(filePath)
             self.builder.get_object("input_file_entry", self.mainwindow).delete(0, tk.END)
             self.builder.get_object("input_file_entry", self.mainwindow).insert(0, filePath)
 
@@ -632,6 +717,7 @@ class ClueGui(ClueGuiUI):
             title="Select Output Directory"
         )
         if directoryPath:
+            self.clueRun.updateBaseDirectory(str(directoryPath))
             self.builder.get_object("directory_entry", self.mainwindow).delete(0, tk.END)
             self.builder.get_object("directory_entry", self.mainwindow).insert(0, str(directoryPath))
 
@@ -645,8 +731,43 @@ class ClueGui(ClueGuiUI):
             filetypes=[("Jar files", "*.jar"), ("All files", "*.*")]
         )
         if filePath:
+            self.clueRun.CLUECLUST = str(filePath)
             self.builder.get_object("clueclust_entry", self.mainwindow).delete(0, tk.END)
             self.builder.get_object("clueclust_entry", self.mainwindow).insert(0, filePath)
+
+    def saveRun(self):
+        if self.clueRun is None:
+            self.__errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        
+        filePath = filedialog.asksaveasfilename(
+            parent=self.mainwindow,
+            title="Save CLUE Run",
+            defaultextension=".xml",
+            filetypes=[("CLUE XML Run files", "*.xml"), ("All files", "*.*")]
+        )
+        if filePath:
+            try:
+                clueserializer.serialize_cluerun(self.clueRun, filePath)
+                Logger.log(f"Run Saved: CLUE run saved to {filePath}.")
+            except clueutil.ClueException as e:
+                self.__errorPopup("Error Saving Run", str(e))
+
+    def loadRun(self):
+        filePath = filedialog.askopenfilename(
+            parent=self.mainwindow,
+            title="Load CLUE Run",
+            filetypes=[("CLUE XML Run files", "*.xml"), ("All files", "*.*")]
+        )
+        if filePath:
+            try:
+                self.clueRun = clueserializer.deserialize_cluerun(filePath)
+                Logger.log(f"Run Loaded: CLUE run loaded from {filePath}.")
+            except clueutil.ClueException as e:
+                self.__errorPopup("Error Loading Run", str(e))
+            self.buildExistingRun()
+
+    #Add 
 
     """
         Helper class to redirect stdout to a text widget in the GUI.
@@ -657,7 +778,7 @@ class ClueGui(ClueGuiUI):
 
         def write(self, text):
             self.text_widget.insert(tk.END, text)
-            self.text_widget.see(tk.END)  # Auto-scroll
+            self.text_widget.see(tk.END)
 
         def flush(self):
             pass  # Needed for Python's stdout
@@ -665,37 +786,38 @@ class ClueGui(ClueGuiUI):
     def __init__(self, master=None):
         super().__init__(master)
         self.clueRun = None
+        self.roundCount = 0
         self.builder.add_from_file(clueuiui.PROJECT_UI)
 
         self.mainwindow = self.builder.get_object("base_frame", master)
-        self.rounds_frame = self.builder.get_object("rounds_list_frame")
+        self.roundsFrame = self.builder.get_object("rounds_list_frame")
 
-        menu_command_add_round = self.builder.get_object("new_round_button", self.mainwindow)
-        menu_command_add_round.config(command=self.addRound)
+        menuCommandAddRound = self.builder.get_object("new_round_button", self.mainwindow)
+        menuCommandAddRound.config(command=self.addRound)
 
-        menu_command_delete_round = self.builder.get_object("delete_round_button", self.mainwindow)
-        menu_command_delete_round.config(command=self.deleteRound)
+        menuCommandDeleteRound = self.builder.get_object("delete_round_button", self.mainwindow)
+        menuCommandDeleteRound.config(command=self.deleteRound)
 
-        menu_command_move_round_up = self.builder.get_object("move_round_up_button", self.mainwindow)
-        menu_command_move_round_up.config(command=self.moveRoundUp)
+        menuCommandMoveRoundUp = self.builder.get_object("move_round_up_button", self.mainwindow)
+        menuCommandMoveRoundUp.config(command=self.moveRoundUp)
 
-        menu_command_move_round_down = self.builder.get_object("move_round_down_button", self.mainwindow)
-        menu_command_move_round_down.config(command=self.moveRoundDown)
+        menuCommandMoveRoundDown = self.builder.get_object("move_round_down_button", self.mainwindow)
+        menuCommandMoveRoundDown.config(command=self.moveRoundDown)
 
-        button_run_clue = self.builder.get_object("run_button", self.mainwindow)
-        button_run_clue.config(command=self.runClueButton)
+        buttonRunClue = self.builder.get_object("run_button", self.mainwindow)
+        buttonRunClue.config(command=self.runClueButton)
 
-        button_change_input = self.builder.get_object("input_file_button", self.mainwindow)
-        button_change_input.config(command=self.selectInputFile)
+        buttonChangeInput = self.builder.get_object("input_file_button", self.mainwindow)
+        buttonChangeInput.config(command=self.selectInputFile)
 
-        button_change_directory = self.builder.get_object("change_directory_button", self.mainwindow)
-        button_change_directory.config(command=self.selectOutputDirectory)
+        buttonChangeDirectory = self.builder.get_object("change_directory_button", self.mainwindow)
+        buttonChangeDirectory.config(command=self.selectOutputDirectory)
 
-        button_change_clueclust = self.builder.get_object("clueclust_button", self.mainwindow)
-        button_change_clueclust.config(command=self.selectClueclustLocation)
+        buttonChangeClueclust = self.builder.get_object("clueclust_button", self.mainwindow)
+        buttonChangeClueclust.config(command=self.selectClueclustLocation)
 
-        text_box = self.builder.get_object("output_text", self.mainwindow)
-        sys.stdout = self.TextRedirector(text_box)
+        textBox = self.builder.get_object("output_text", self.mainwindow)
+        sys.stdout = self.TextRedirector(textBox)
 
         self.plotNotebook = self.builder.get_object("plots_notebook", self.mainwindow)
 

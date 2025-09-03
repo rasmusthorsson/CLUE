@@ -5,6 +5,36 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+class ClueLogger:
+    """
+        Static logger class for CLUE, prints all the messages sent and also stores them in a 
+        log file if a log file has been specified.
+    """
+    logFile = None
+
+    @staticmethod
+    def setLogFile(logFilePath):
+        try:
+            ClueLogger.logFile = open(logFilePath, "a")
+        except Exception as e:
+            print("Error opening log file: " + str(e))
+
+    def log(*args, **kwargs):
+        print(*args, **kwargs)
+        if (ClueLogger.logFile):
+            try:
+                print(*args, file=ClueLogger.logFile, **kwargs)
+                ClueLogger.logFile.flush()
+            except Exception as e:
+                print("Error writing to log file: " + str(e))
+
+    @staticmethod
+    def closeLogFile():
+        if (ClueLogger.logFile):
+            ClueLogger.logFile.close()
+            ClueLogger.logFile = None
+
+
 #Base class for exceptions in CLUE
 class ClueException(Exception):
     pass
@@ -67,7 +97,7 @@ class FeatureExtractor:
     #Extract features from and individual line, including "ID" feature
     @staticmethod
     def __extract(line):
-        newLine = [line["ID"].astype(int)] #TODO Fix bug where pandas converts to float for ID
+        newLine = [line.iloc[0]] #TODO Fix bug where pandas converts to float for ID
         for v in FeatureExtractor.__featuresDict.values():
             newLine.append(v(line))
         return newLine
@@ -117,13 +147,15 @@ class InputFilter:
     @staticmethod
     def filter(inputDF, clustersFD, metadataFD, featuresFD, selectionFD):
         #If no feature file or if feature file is empty, accept all features
-        noFeatures = False 
-        if (featuresFD != None):
+        noFeatures = False
+        if featuresFD:
             try:
                 featuresDF = pd.read_csv(featuresFD, header=0)
             except pd.errors.EmptyDataError:
+                ClueLogger.log("Features file is empty, accepting all features...")
                 noFeatures = True
         else:
+            ClueLogger.log("No features file provided, accepting all features...")
             noFeatures = True
         
         selectedColumns = []
@@ -145,6 +177,8 @@ class InputFilter:
             clustersDF = pd.read_csv(clustersFD, header=None)
             metadataDF = pd.read_csv(metadataFD)
             if (clustersDF.empty or metadataDF.empty):
+                #TODO Fix so that noise can be used as an explicit cluster if desired
+                ClueLogger.log("Either cluster or metadata file is empty, meaning no clusters were found in the previous round, stopping run...")
                 raise ClueException("Clusters or metadata file is empty, cannot filter input")
             if (selectionFD):
                 selectionFile = open(selectionFD)
@@ -155,13 +189,13 @@ class InputFilter:
                 selectionFile.close()
                 filteredSelectionDF = InputFilter.filterSelection(commands, metadataDF)
                 filteredClustersDF = clustersDF.loc[clustersDF.iloc[:, 1].isin(map(int, filteredSelectionDF["ClusterId"]))]
-                nextInput = nextInput.loc[nextInput["ID"].isin(map(int, filteredClustersDF.iloc[:, 0].array))]
+                nextInput = nextInput.loc[nextInput.iloc[:, 0].isin(filteredClustersDF.iloc[:, 0].array)]
             else:
-                nextInput = nextInput.loc[nextInput["ID"].isin(map(int, clustersDF.iloc[:, 0].array))]
+                nextInput = nextInput.loc[nextInput.iloc[:, 0].isin(clustersDF.iloc[:, 0].array)]
         elif (clustersFD and not metadataFD): #MetadataFD does not exist
-            print("Exception: Metadata file does not exist but clusters file does, skipping filtering...")
+            ClueLogger.log("Warning: Metadata file does not exist but clusters file does, skipping filtering...")
         elif (metadataFD and not clustersFD): #ClustersDF does not exist
-            print("Exception: Clusters file does not exist but metadata file does, skipping filtering...")
+            ClueLogger.log("Warning: Clusters file does not exist but metadata file does, skipping filtering...")
 
         return nextInput
 
@@ -175,41 +209,44 @@ class ClueGraphing:
     #Plot bands of the mean data for each cluster
     def __rawBands(clueRound, baseInputFD, baseFeaturesFD, ax):
         metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
-        averagesColumns = [col for col in metadataDF.columns if col.startswith('Mean')]
+        averagesColumns = [col for col in metadataDF.columns if col.startswith('OrigMean')]
         lines = []
+        legendLabels = []
         for rowIndex in range(len(metadataDF)):
+            legendLabels.append("Cluster " + str(metadataDF["ClusterId"].iloc[rowIndex]))
             line = ax.plot(metadataDF[averagesColumns].iloc[rowIndex])
             lines.append(line)
 
         xTicks = []
+        xLabels = []
         for index in range(len(averagesColumns)):
             if (index % 2 == 0):
+                xLabels.append("Timestep " + str(index + 1))
                 xTicks.append(index)
         
         ax.set_xticks(ticks=xTicks)
+        ax.set_xticklabels(labels=xLabels)
         ax.tick_params(axis='x', rotation=45)
         ax.set_xlabel("Measurement Timestep")
         ax.set_ylabel("Consumption")
 
-        legendLabels = []
-        for index in range(len(lines)):
-            legendLabels.append("Cluster " + str(index))
         ax.legend(legendLabels)
 
     #Plot feature profiles of the raw feature data for each cluster 
     def __featureProfiles(clueRound, baseInputFD, baseFeaturesFD, ax): #TODO Use feature selection to limit plotted features
         baseFeaturesDF = pd.read_csv(baseFeaturesFD)
         clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile)
+        metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
         filteredFeaturesDF = InputFilter.filter(baseFeaturesDF, 
                                                 clueRound.roundDirectory + clueRound.clustersFile, 
                                                 clueRound.roundDirectory + clueRound.metadataFile, 
                                                 None, 
                                                 None)
-        uniqueClusters = clustersDF.iloc[:, 1].unique()
+        uniqueClusters = metadataDF.iloc[:, 0].unique()
         clusterFeaturesDict = {}
         for cluster in uniqueClusters:
             clusterIDsDF = clustersDF.loc[clustersDF.iloc[:, 1] == cluster].iloc[:, 0]
-            clusterFilteredFeaturesDF = filteredFeaturesDF.loc[filteredFeaturesDF["ID"].isin(map(int, clusterIDsDF.array))]
+            clusterFilteredFeaturesDF = filteredFeaturesDF.loc[filteredFeaturesDF["ID"].isin(clusterIDsDF.array)]
             clusterFeaturesDict[cluster] = clusterFilteredFeaturesDF
 
         clusterFeatureAverages = []
@@ -285,4 +322,4 @@ class ClueGraphing:
             if (outputDirectory):
                 plt.savefig(outputDirectory + "/" + list(ClueGraphing.__graphDict.keys())[graphIndex] + ".png")
             else:
-                print("No output directory specified, skipping saving of graph " + list(ClueGraphing.__graphDict.keys())[graphIndex])
+                ClueLogger.log("No output directory specified, skipping saving of graph " + list(ClueGraphing.__graphDict.keys())[graphIndex])

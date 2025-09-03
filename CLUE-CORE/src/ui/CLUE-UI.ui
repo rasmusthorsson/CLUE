@@ -378,11 +378,13 @@ Move Down
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="load_run_command" named="True">
+            <property name="command" type="command" cbtype="simple">loadRun</property>
             <property name="label" translatable="yes">Load Run</property>
           </object>
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="save_run_command" named="True">
+            <property name="command" type="command" cbtype="simple">saveRun</property>
             <property name="label" translatable="yes">Save Run</property>
           </object>
         </child>

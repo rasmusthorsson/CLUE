@@ -157,11 +157,10 @@ public class Dataset {
                         features.add(0.0);
                     }
                 }
-
                 Point point = new Point(features);
                 point.setId(idCounter++);
                 points.add(point);
-
+                
                 // Store original features
                 originalFeatures.add(new ArrayList<>(features));
 
@@ -228,6 +227,7 @@ public class Dataset {
         for (Point point : points) {
             point.normalize(true);
         }
+        this.numberOfDimensions--;
     }
 
     // Remove the mean from all points in the dataset

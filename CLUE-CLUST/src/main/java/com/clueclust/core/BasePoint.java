@@ -92,6 +92,11 @@ public class BasePoint {
             features.set(i, features.get(i) / norm);
         }
         normalized = true;
+        if (auxDim) {
+            // Remove the auxiliary dimension (last element)
+            features.remove(features.size() - 1);
+            //TODO: Actually check if this is correct
+        }
     }
 
     // Add another vector to this one
