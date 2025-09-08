@@ -43,11 +43,11 @@ class ClueGui(ClueGuiUI):
     """
         Open a file dialog to choose a file and set the entry widget's value to the selected file path.
     """
-    def __chooseFile(self, entryWidget, popupWindow):
-        filePath = tk.filedialog.askopenfilename(
+    def __chooseFile(self, entryWidget, popupWindow, type=("CSV files", "*.csv")):
+        filePath = tk.filedialog.asksaveasfilename(
             parent=popupWindow,
             title="Select Features File",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            filetypes=[type, ("All files", "*.*")]
         )
         if filePath:
             entryWidget.delete(0, tk.END)
@@ -655,14 +655,55 @@ class ClueGui(ClueGuiUI):
         for round in self.clueRun.rounds:
             self.addExistingRound(round.roundName)
 
+    def cleanupAfterRun(self, button, finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput):
+        self.stopRunningIndicator(button)
+        self.runThread = None
+        self.buildGraphs(finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput)
+
+    def cleanupAfterError(self, button):
+        self.stopRunningIndicator(button)
+        self.runThread = None
+
+    def runNextRound(self):
+        try:
+            Logger.log("Running CLUE: Starting the next round...")
+            _round = self.clueRun.runNextRound()
+            if _round < len(self.clueRun.rounds):
+                self.mainwindow.after(0, self.cleanupAfterRun,
+                            self.buttonRunNext,
+                            self.clueRun.rounds[_round - 1],
+                            self.clueRun.baseFile,
+                            self.clueRun.baseFeaturesFile,
+                            str(self.clueRun.rounds[_round - 1].roundDirectory),
+                            True)
+            else:
+                self.mainwindow.after(0, self.cleanupAfterRun,
+                            self.buttonRunNext,
+                            self.clueRun.rounds[len(self.clueRun.rounds) - 1],
+                            self.clueRun.baseFile,
+                            self.clueRun.baseFeaturesFile,
+                            str(self.clueRun.targetRunDirectory) + "/" + self.clueRun.outputDirectory,
+                            True)
+            if self.clueRun.getRoundPointer() < len(self.clueRun.rounds):
+                Logger.log("Round Complete: The current round has completed successfully. Ready for the next round.")
+            else:
+                Logger.log("Run Complete: The CLUE run has completed successfully.")
+        except clueutil.ClueException as e:
+            self.__errorPopup("Clue Run Error", str(e))
+            self.mainwindow.after(0, self.cleanupAfterError, self.buttonRunNext)
+        except Exception as e:
+            self.__errorPopup("Unexpected Error", str(e))
+            self.mainwindow.after(0, self.cleanupAfterError, self.buttonRunNext)
+
     """
         Execute the current CLUE run.
     """
-    def runClue(self):
+    def runClueFromBeginning(self):
         try:
             Logger.log("Running CLUE: Starting the CLUE run...")
-            self.clueRun.run()
-            self.mainwindow.after(0, self.buildGraphs,
+            self.clueRun.runFromBeginning()
+            self.mainwindow.after(0, self.cleanupAfterRun,
+                            self.buttonRunClue,
                             self.clueRun.rounds[len(self.clueRun.rounds) - 1],
                             self.clueRun.baseFile,
                             self.clueRun.baseFeaturesFile,
@@ -671,15 +712,23 @@ class ClueGui(ClueGuiUI):
             Logger.log("Run Complete: The CLUE run has completed successfully.")
         except clueutil.ClueException as e:
             self.__errorPopup("Clue Run Error", str(e))
+            self.mainwindow.after(0, self.cleanupAfterError, self.buttonRunClue)
         except Exception as e:
             self.__errorPopup("Unexpected Error", str(e))
+            self.mainwindow.after(0, self.cleanupAfterError, self.buttonRunClue)
 
-    """
-        Method called when the run button is clicked. Starts the CLUE run in a separate thread.
-    """
-    def runClueButton(self):    
+    def runNextRoundButton(self):
         if self.clueRun is None:
             self.__errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        if self.runThread and self.runThread.is_alive():
+            self.__errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before starting a new one.")
+            return
+        if not self.clueRun.rounds:
+            self.__errorPopup("No Rounds", "No rounds defined in the current run. Please add rounds before running.")
+            return
+        if self.clueRun.getRoundPointer() >= len(self.clueRun.rounds):
+            self.__errorPopup("All Rounds Completed", "All rounds in the current run have already been completed.")
             return
         #Set global run settings before run
         inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
@@ -689,10 +738,37 @@ class ClueGui(ClueGuiUI):
             self.__errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
             return
         else:
-            self.clueRun.baseFile = str(inputFile)
+            self.clueRun.updateBaseFile(str(inputFile))
             self.clueRun.updateBaseDirectory(str(outputDirectory))
             self.clueRun.CLUECLUST = str(clueclustLocation)
-        threading.Thread(target=self.runClue).start()
+            self.startRunningIndicator(self.buttonRunNext)
+            self.runThread = threading.Thread(target=self.runNextRound)
+            self.runThread.start()
+
+    """
+        Method called when the run button is clicked. Starts the CLUE run in a separate thread.
+    """
+    def runClueButton(self):    
+        if self.clueRun is None:
+            self.__errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        if self.runThread and self.runThread.is_alive():
+            self.__errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before starting a new one.")
+            return
+        #Set global run settings before run
+        inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
+        outputDirectory = self.builder.get_object("directory_entry", self.mainwindow).get()
+        clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
+        if not inputFile or not outputDirectory or not clueclustLocation:
+            self.__errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
+            return
+        else:
+            self.clueRun.updateBaseFile(str(inputFile))
+            self.clueRun.updateBaseDirectory(str(outputDirectory))
+            self.clueRun.CLUECLUST = str(clueclustLocation)
+            self.startRunningIndicator(self.buttonRunClue)
+            self.runThread = threading.Thread(target=self.runClueFromBeginning)
+            self.runThread.start()
 
     """
         Select the input file for the CLUE run.
@@ -767,10 +843,72 @@ class ClueGui(ClueGuiUI):
                 self.__errorPopup("Error Loading Run", str(e))
             self.buildExistingRun()
 
-    #Add 
+    def startRunningIndicator(self, button):
+        self.originalText = button.cget("text")
+        self.isRunning = True
+        self.flashState = 0
+        self.flashButton(button)
+        for btn in self.runButtons:
+            btn.config(state="disabled")
+    
+    def stopRunningIndicator(self, button):
+        self.isRunning = False
+        if self.originalText:
+            button.config(text=self.originalText)
+        for btn in self.runButtons:
+            btn.config(state="normal")
+
+    def flashButton(self, button):
+        if self.isRunning:
+            if self.flashState == 0:
+                button.config(text="Running...")
+            elif self.flashState == 1:
+                button.config(text="Running")
+            elif self.flashState == 2:
+                button.config(text="Running.")
+            elif self.flashState == 3:
+                button.config(text="Running..")
+            self.flashState = (self.flashState + 1) % 4
+            self.mainwindow.after(250, lambda: self.flashButton(button))
+        else:
+            button.config(text=self.originalText, state="normal")
+
+    #Build a popup for settings for a callback from the settings menu, this should have a file
+    #selection for the log file location and a checkbox for enabling/disabling logging to file
+    def logSettingsPopup(self):
+        popup = tk.Toplevel(self.mainwindow)
+        popup.title("Log Settings")
+        popup.grab_set()
+        popup.focus_force()
+        popup.columnconfigure(0, weight=1)
+        popup.rowconfigure(0, weight=1)
+        settingsFrame = tk.Frame(popup, padx=10, pady=10)
+        settingsFrame.grid(row=0, column=0, padx=10, pady=5, stick="nsew")
+        #Log to file checkbox   
+        logToFileVar = tk.BooleanVar(value=Logger.logToFile)
+        tk.Checkbutton(settingsFrame, text="Log to File", variable=logToFileVar).grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        #Log file selection
+        tk.Label(settingsFrame, text="Log File:").grid(row=0, column=1, padx=5, pady=5, sticky="e")
+        logFileEntry = tk.Entry(settingsFrame)
+        logFileEntry.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+        logFileEntry.insert(0, Logger.logFile.name if Logger.logFile else "")  # <-- Set initial value
+        logFileButton = tk.Button(
+            settingsFrame,
+            text="Browse",
+            command=lambda: self.__chooseFile(logFileEntry, popup, type=("Log files", "*.log"))
+        )
+        logFileButton.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
+        #On clicking OK, update the Logger settings
+        def onOk():
+            Logger.logToFile = logToFileVar.get()
+            Logger.setLogFile(str(logFileEntry.get()) or None)
+            Logger.log("Settings Updated: Logging settings have been updated.")
+            popup.destroy()
+        tk.Button(popup, text="OK", command=onOk).grid(row=2, column=0, padx=5, pady=10)
+        tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=2, column=1, padx=5, pady=10)
 
     """
-        Helper class to redirect stdout to a text widget in the GUI.
+        Helper class to redirect stdout to a text widget in the GUI. NOT USED
     """
     class TextRedirector:
         def __init__(self, text_widget):
@@ -783,11 +921,23 @@ class ClueGui(ClueGuiUI):
         def flush(self):
             pass  # Needed for Python's stdout
 
+    def updateQueue(self):
+        messages = Logger.getQueuedMessages()
+        for msg in messages:
+            if msg.endswith('\n'):
+                self.textBox.insert(tk.END, msg)
+            else:
+                self.textBox.insert(tk.END, msg + "\n")
+            self.textBox.see(tk.END)
+        self.mainwindow.after(100, self.updateQueue)  # Check the queue every 100 ms
+
     def __init__(self, master=None):
         super().__init__(master)
+        self.runThread = None
         self.clueRun = None
         self.roundCount = 0
         self.builder.add_from_file(clueuiui.PROJECT_UI)
+        self.runningButton = None
 
         self.mainwindow = self.builder.get_object("base_frame", master)
         self.roundsFrame = self.builder.get_object("rounds_list_frame")
@@ -806,6 +956,17 @@ class ClueGui(ClueGuiUI):
 
         buttonRunClue = self.builder.get_object("run_button", self.mainwindow)
         buttonRunClue.config(command=self.runClueButton)
+        self.buttonRunClue = buttonRunClue
+
+        buttonRunRest = self.builder.get_object("run_rest_button", self.mainwindow)
+        #buttonRunRest.config(command=self.runNextRoundButton)
+        self.buttonRunRest = buttonRunRest
+
+        buttonRunNext = self.builder.get_object("run_next_button", self.mainwindow)
+        buttonRunNext.config(command=self.runNextRoundButton)
+        self.buttonRunNext = buttonRunNext
+
+        self.runButtons = [buttonRunClue, buttonRunRest, buttonRunNext] 
 
         buttonChangeInput = self.builder.get_object("input_file_button", self.mainwindow)
         buttonChangeInput.config(command=self.selectInputFile)
@@ -816,12 +977,16 @@ class ClueGui(ClueGuiUI):
         buttonChangeClueclust = self.builder.get_object("clueclust_button", self.mainwindow)
         buttonChangeClueclust.config(command=self.selectClueclustLocation)
 
-        textBox = self.builder.get_object("output_text", self.mainwindow)
-        sys.stdout = self.TextRedirector(textBox)
+        self.textBox = self.builder.get_object("output_text", self.mainwindow)
+        #sys.stdout = self.TextRedirector(textBox)
 
         self.plotNotebook = self.builder.get_object("plots_notebook", self.mainwindow)
 
         self.builder.connect_callbacks(self)
+
+        Logger.enableQueue()
+        self.updateQueue()
+
 
 if __name__ == "__main__":
     app = ClueGui()

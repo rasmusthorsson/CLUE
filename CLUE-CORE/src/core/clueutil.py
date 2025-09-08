@@ -1,5 +1,7 @@
+import queue
 import sys
 import random
+import time
 
 import pandas as pd
 import numpy as np
@@ -11,18 +13,69 @@ class ClueLogger:
         log file if a log file has been specified.
     """
     logFile = None
+    logToFile = False
+    message_queue = None
+    queue_enabled = False
+
+    @staticmethod
+    def enableQueue():
+        ClueLogger.queue_enabled = True
+        ClueLogger.message_queue = queue.Queue()
+
+    @staticmethod
+    def disableQueue():
+        ClueLogger.queue_enabled = False
+        ClueLogger.message_queue = None
+
+    @staticmethod
+    def clearQueue():
+        if (ClueLogger.message_queue):
+            ClueLogger.message_queue.queue.clear()
+
+    @staticmethod
+    def getQueuedMessages():
+        messages = []
+        if (ClueLogger.message_queue):
+            while not ClueLogger.message_queue.empty():
+                messages.append(ClueLogger.message_queue.get())
+        return messages
+
+    @staticmethod
+    def setLogToFile(logToFile):
+        ClueLogger.logToFile = logToFile
 
     @staticmethod
     def setLogFile(logFilePath):
-        try:
-            ClueLogger.logFile = open(logFilePath, "a")
-        except Exception as e:
-            print("Error opening log file: " + str(e))
+        if (logFilePath):
+            try:
+                if (ClueLogger.logFile):
+                    ClueLogger.logFile.close()
+                ClueLogger.logFile = open(logFilePath, "a")
+            except Exception as e:
+                print("Error opening log file: " + str(e))
+        else:
+            if (ClueLogger.logFile):
+                ClueLogger.logFile.close()
+            ClueLogger.logFile = None
 
     def log(*args, **kwargs):
+        if (ClueLogger.queue_enabled and ClueLogger.message_queue):
+            ClueLogger.message_queue.put(' '.join(map(str, args)))
+
         print(*args, **kwargs)
-        if (ClueLogger.logFile):
+        if (ClueLogger.logFile and ClueLogger.logToFile):
             try:
+                ClueLogger.logToFileOnly(*args, **kwargs)
+                ClueLogger.logFile.flush()
+            except Exception as e:
+                print("Error writing to log file: " + str(e))
+
+    def logToFileOnly(*args, **kwargs):
+        if (ClueLogger.logFile and ClueLogger.logToFile):
+            try:
+                #Print the current time with the log message
+                currentTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                print("[" + currentTime + "] ", end="", file=ClueLogger.logFile)
                 print(*args, file=ClueLogger.logFile, **kwargs)
                 ClueLogger.logFile.flush()
             except Exception as e:
@@ -105,6 +158,7 @@ class FeatureExtractor:
     #Returns a list of the features available, including "ID" feature
     @staticmethod
     def headers():
+        ClueLogger.logToFileOnly("__headers called")
         headers = ["ID"]
         for k in FeatureExtractor.__featuresDict.keys():
             headers.append(k) 
@@ -113,10 +167,12 @@ class FeatureExtractor:
     #Extract features from a dataframe, returns a new dataframe with headers included
     @staticmethod
     def extractFromDataFrame(dataframe):
+        ClueLogger.logToFileOnly("extractFromDataFrame called")
         outMatrix = np.matrix(FeatureExtractor.__extract(dataframe.iloc[0]))
         for i in range(1, len(dataframe)):
             outMatrix = np.vstack((outMatrix, FeatureExtractor.__extract(dataframe.iloc[i])))
         headers = FeatureExtractor.headers()
+        ClueLogger.logToFileOnly("HEADERS DONE IN EXTRACTFROMDATAFRAME")
         return pd.DataFrame(data=outMatrix, columns=headers)
 
 #Static class for filtering the input based on feature selection, cluster selection, clusters found from previous round
@@ -127,6 +183,7 @@ class InputFilter:
     #the selections in the cluster selection file.
     @staticmethod
     def filterSelection(commands, metadataDF):
+        ClueLogger.logToFileOnly("filterSelection called")
         filteredDF = metadataDF
         for command in commands:
             if (command[0] == "OVER"): #Over cluster size
@@ -146,6 +203,7 @@ class InputFilter:
     #selection.
     @staticmethod
     def filter(inputDF, clustersFD, metadataFD, featuresFD, selectionFD):
+        ClueLogger.logToFileOnly("filter called")
         #If no feature file or if feature file is empty, accept all features
         noFeatures = False
         if featuresFD:
@@ -208,6 +266,7 @@ class ClueGraphing:
 
     #Plot bands of the mean data for each cluster
     def __rawBands(clueRound, baseInputFD, baseFeaturesFD, ax):
+        ClueLogger.logToFileOnly("__rawBands called")
         metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
         averagesColumns = [col for col in metadataDF.columns if col.startswith('OrigMean')]
         lines = []
@@ -234,6 +293,7 @@ class ClueGraphing:
 
     #Plot feature profiles of the raw feature data for each cluster 
     def __featureProfiles(clueRound, baseInputFD, baseFeaturesFD, ax): #TODO Use feature selection to limit plotted features
+        ClueLogger.logToFileOnly("__featureProfiles called")
         baseFeaturesDF = pd.read_csv(baseFeaturesFD)
         clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile)
         metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
@@ -259,6 +319,7 @@ class ClueGraphing:
         random.seed(42) #Use of random to vary the colors in the heatmap slightly for increased visibility
 
         headers = FeatureExtractor.headers()
+        ClueLogger.logToFileOnly("HEADERS DONE")
         xAxis = headers[1:len(headers)]
         yAxis = list(clusterFeaturesDict.keys())
 
@@ -309,6 +370,7 @@ class ClueGraphing:
     #Generates all plots specified in __graphDict
     @staticmethod
     def generateGraphs(clueRound, baseInputFD, baseFeaturesFD, outputDirectory=None, directOutput=False):
+        ClueLogger.logToFileOnly("generateGraphs called")
         if (len(pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile, header=0)) == 0):
             raise ClueException("Metadata file is empty")
         if (not directOutput and not outputDirectory):
