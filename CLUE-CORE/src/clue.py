@@ -8,7 +8,7 @@ import tkinter.ttk as ttk
 from tkinter import filedialog
 
 from core import cluerun, clueutil, clueserializer
-from core.clueutil import ClueLogger as Logger
+from core.clueutil import ClueCancellation, ClueLogger as Logger
 from ui import clueuiui
 from ui.clueuiui import ClueGuiUI
 
@@ -39,6 +39,7 @@ class ClueGui(ClueGuiUI):
         width = errorPopup.winfo_reqwidth()
         height = errorPopup.winfo_reqheight()
         errorPopup.geometry(f"{width}x{height}")
+        Logger.log(f"Error Popup: {title} - {message}")
 
     """
         Open a file dialog to choose a file and set the entry widget's value to the selected file path.
@@ -626,6 +627,12 @@ class ClueGui(ClueGuiUI):
             )
         except clueutil.ClueException as e:
             self.__errorPopup("Graph Generation Error", str(e))
+            return
+        except Exception as e:
+            self.__errorPopup("Unexpected Error", str(e))
+            return
+        roundName = round.roundName if round is not None else "None"
+        self.builder.get_object("round_graph_name", self.mainwindow).config(text=roundName)
 
         for tab in self.plotNotebook.tabs():
             self.plotNotebook.forget(tab)
@@ -660,10 +667,6 @@ class ClueGui(ClueGuiUI):
         self.runThread = None
         self.buildGraphs(finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput)
 
-    def cleanupAfterError(self, button):
-        self.stopRunningIndicator(button)
-        self.runThread = None
-
     def runNextRound(self):
         try:
             Logger.log("Running CLUE: Starting the next round...")
@@ -688,12 +691,43 @@ class ClueGui(ClueGuiUI):
                 Logger.log("Round Complete: The current round has completed successfully. Ready for the next round.")
             else:
                 Logger.log("Run Complete: The CLUE run has completed successfully.")
+            if ClueCancellation.is_cancellation_requested():
+                Logger.log("Run Cancelled: The CLUE round was completed before it could be cancelled.")
+                ClueCancellation.clear_cancellation()
+        except clueutil.ClueCancelledException as e:
+            errorMsg = str(e)
+            self.mainwindow.after(0, self.onRunCancelled, self.buttonRunNext, errorMsg)
         except clueutil.ClueException as e:
-            self.__errorPopup("Clue Run Error", str(e))
-            self.mainwindow.after(0, self.cleanupAfterError, self.buttonRunNext)
+            errorMsg = str(e)
+            self.mainwindow.after(0, self.onRunError, self.buttonRunNext, errorMsg)
         except Exception as e:
-            self.__errorPopup("Unexpected Error", str(e))
-            self.mainwindow.after(0, self.cleanupAfterError, self.buttonRunNext)
+            errorMsg = str(e)
+            self.mainwindow.after(0, self.onRunError, self.buttonRunNext, errorMsg)
+
+    def runRest(self):
+        try:
+            Logger.log("Running CLUE: Starting the remainder of the CLUE run...")
+            self.clueRun.runRemainder()
+            self.mainwindow.after(0, self.cleanupAfterRun,
+                            self.buttonRunRest,
+                            self.clueRun.rounds[len(self.clueRun.rounds) - 1],
+                            self.clueRun.baseFile,
+                            self.clueRun.baseFeaturesFile,
+                            str(self.clueRun.targetRunDirectory) + "/" + self.clueRun.outputDirectory,
+                            True)
+            Logger.log("Run Complete: The CLUE run has completed successfully.")
+            if ClueCancellation.is_cancellation_requested():
+                Logger.log("Run Cancelled: The CLUE run was completed before it could be cancelled.")
+                ClueCancellation.clear_cancellation()
+        except clueutil.ClueCancelledException as e:
+            errorMsg = str(e)
+            self.mainwindow.after(0, self.onRunCancelled, self.buttonRunRest, errorMsg)
+        except clueutil.ClueException as e:
+            errorMsg = str(e)
+            self.mainwindow.after(0, self.onRunError, self.buttonRunRest, errorMsg)
+        except Exception as e:
+            errorMsg = str(e)
+            self.mainwindow.after(0, self.onRunError, self.buttonRunRest, errorMsg)
 
     """
         Execute the current CLUE run.
@@ -710,25 +744,36 @@ class ClueGui(ClueGuiUI):
                             str(self.clueRun.targetRunDirectory) + "/" + self.clueRun.outputDirectory,
                             True)
             Logger.log("Run Complete: The CLUE run has completed successfully.")
+            if ClueCancellation.is_cancellation_requested():
+                Logger.log("Run Cancelled: The CLUE run was completed before it could be cancelled.")
+                ClueCancellation.clear_cancellation()
+        except clueutil.ClueCancelledException as e:
+            errorMsg = str(e)
+            self.mainwindow.after(0, self.onRunCancelled, self.buttonRunClue, errorMsg)
         except clueutil.ClueException as e:
-            self.__errorPopup("Clue Run Error", str(e))
-            self.mainwindow.after(0, self.cleanupAfterError, self.buttonRunClue)
+            errorMsg = str(e)
+            self.mainwindow.after(0, self.onRunError, self.buttonRunClue, errorMsg)
         except Exception as e:
-            self.__errorPopup("Unexpected Error", str(e))
-            self.mainwindow.after(0, self.cleanupAfterError, self.buttonRunClue)
+            errorMsg = str(e)
+            self.mainwindow.after(0, self.onRunError, self.buttonRunClue, errorMsg)
 
-    def runNextRoundButton(self):
+    def runCheck(self):
         if self.clueRun is None:
             self.__errorPopup("No run defined", "No run defined, Please create a run first.")
-            return
-        if self.runThread and self.runThread.is_alive():
-            self.__errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before starting a new one.")
-            return
+            return False
         if not self.clueRun.rounds:
             self.__errorPopup("No Rounds", "No rounds defined in the current run. Please add rounds before running.")
-            return
+            return False
         if self.clueRun.getRoundPointer() >= len(self.clueRun.rounds):
             self.__errorPopup("All Rounds Completed", "All rounds in the current run have already been completed.")
+            return False
+        if self.runThread and self.runThread.is_alive():
+            self.__errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before starting a new one.")
+            return False
+        return True
+
+    def runNextRoundButton(self):
+        if not self.runCheck():
             return
         #Set global run settings before run
         inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
@@ -741,19 +786,39 @@ class ClueGui(ClueGuiUI):
             self.clueRun.updateBaseFile(str(inputFile))
             self.clueRun.updateBaseDirectory(str(outputDirectory))
             self.clueRun.CLUECLUST = str(clueclustLocation)
+
             self.startRunningIndicator(self.buttonRunNext)
+            ClueCancellation.clear_cancellation()
+            
             self.runThread = threading.Thread(target=self.runNextRound)
+            self.runThread.start()
+
+    def runRestButton(self):
+        if not self.runCheck():
+            return
+        #Set global run settings before run
+        inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
+        outputDirectory = self.builder.get_object("directory_entry", self.mainwindow).get()
+        clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
+        if not inputFile or not outputDirectory or not clueclustLocation:
+            self.__errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
+            return
+        else:
+            self.clueRun.updateBaseFile(str(inputFile))
+            self.clueRun.updateBaseDirectory(str(outputDirectory))
+            self.clueRun.CLUECLUST = str(clueclustLocation)
+
+            self.startRunningIndicator(self.buttonRunRest)
+            ClueCancellation.clear_cancellation()
+
+            self.runThread = threading.Thread(target=self.runRest)
             self.runThread.start()
 
     """
         Method called when the run button is clicked. Starts the CLUE run in a separate thread.
     """
-    def runClueButton(self):    
-        if self.clueRun is None:
-            self.__errorPopup("No run defined", "No run defined, Please create a run first.")
-            return
-        if self.runThread and self.runThread.is_alive():
-            self.__errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before starting a new one.")
+    def runClueButton(self):
+        if not self.runCheck():
             return
         #Set global run settings before run
         inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
@@ -766,9 +831,42 @@ class ClueGui(ClueGuiUI):
             self.clueRun.updateBaseFile(str(inputFile))
             self.clueRun.updateBaseDirectory(str(outputDirectory))
             self.clueRun.CLUECLUST = str(clueclustLocation)
+
+            ClueCancellation.clear_cancellation()
             self.startRunningIndicator(self.buttonRunClue)
+
             self.runThread = threading.Thread(target=self.runClueFromBeginning)
             self.runThread.start()
+
+    def resetRunButton(self):
+        if self.clueRun is None:
+            self.__errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        if self.runThread and self.runThread.is_alive():
+            self.__errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before resetting.")
+            return
+        self.clueRun.resetRun()
+        Logger.log("Run Reset: " + self.clueRun.runName + " has been reset to the beginning.")
+
+    def cancelRunButton(self):
+        if self.clueRun is None:
+            self.__errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        if self.runThread and self.runThread.is_alive():
+            ClueCancellation.request_cancellation()
+            Logger.log("Run Cancellation Requested: Attempting to cancel the current CLUE run...")
+        else:
+            self.__errorPopup("No Run in Progress", "No CLUE run is currently in progress to cancel.")
+
+    def onRunError(self, button, errorMsg):
+        self.stopRunningIndicator(button)
+        self.__errorPopup("Clue Run Error", str(errorMsg))
+        self.runThread = None
+
+    def onRunCancelled(self, button, errorMsg):
+        self.stopRunningIndicator(button)
+        Logger.log("Run " + self.clueRun.runName + " has been cancelled: " + str(errorMsg))
+        self.runThread = None
 
     """
         Select the input file for the CLUE run.
@@ -848,26 +946,26 @@ class ClueGui(ClueGuiUI):
         self.isRunning = True
         self.flashState = 0
         self.flashButton(button)
-        for btn in self.runButtons:
+        for btn in self.blockButtons:
             btn.config(state="disabled")
     
     def stopRunningIndicator(self, button):
         self.isRunning = False
         if self.originalText:
             button.config(text=self.originalText)
-        for btn in self.runButtons:
+        for btn in self.blockButtons:
             btn.config(state="normal")
 
     def flashButton(self, button):
         if self.isRunning:
             if self.flashState == 0:
-                button.config(text="Running...")
+                button.config(text="Running    ")
             elif self.flashState == 1:
-                button.config(text="Running")
+                button.config(text="Running.   ")
             elif self.flashState == 2:
-                button.config(text="Running.")
+                button.config(text="Running..  ")
             elif self.flashState == 3:
-                button.config(text="Running..")
+                button.config(text="Running... ")
             self.flashState = (self.flashState + 1) % 4
             self.mainwindow.after(250, lambda: self.flashButton(button))
         else:
@@ -959,14 +1057,21 @@ class ClueGui(ClueGuiUI):
         self.buttonRunClue = buttonRunClue
 
         buttonRunRest = self.builder.get_object("run_rest_button", self.mainwindow)
-        #buttonRunRest.config(command=self.runNextRoundButton)
+        buttonRunRest.config(command=self.runRestButton)
         self.buttonRunRest = buttonRunRest
 
         buttonRunNext = self.builder.get_object("run_next_button", self.mainwindow)
         buttonRunNext.config(command=self.runNextRoundButton)
         self.buttonRunNext = buttonRunNext
 
-        self.runButtons = [buttonRunClue, buttonRunRest, buttonRunNext] 
+        buttonResetRun = self.builder.get_object("reset_run_button", self.mainwindow)
+        buttonResetRun.config(command=self.resetRunButton)
+        self.buttonResetRun = buttonResetRun
+
+        buttonCancelRun = self.builder.get_object("cancel_run_button", self.mainwindow)
+        buttonCancelRun.config(command=self.cancelRunButton)
+
+        self.blockButtons = [buttonRunClue, buttonRunRest, buttonRunNext, buttonResetRun]
 
         buttonChangeInput = self.builder.get_object("input_file_button", self.mainwindow)
         buttonChangeInput.config(command=self.selectInputFile)

@@ -172,6 +172,36 @@ Move Down
                 </layout>
               </object>
             </child>
+            <child>
+              <object class="ttk.Frame" id="Frame1">
+                <property name="height">200</property>
+                <property name="width">200</property>
+                <layout manager="grid">
+                  <property name="column">1</property>
+                  <property name="ipady">5</property>
+                  <property name="row">0</property>
+                </layout>
+                <child>
+                  <object class="ttk.Label" id="round_graph_label" named="True">
+                    <property name="text" translatable="yes">Current Round Plot:</property>
+                    <layout manager="grid">
+                      <property name="column">0</property>
+                      <property name="padx">10</property>
+                      <property name="row">0</property>
+                    </layout>
+                  </object>
+                </child>
+                <child>
+                  <object class="ttk.Label" id="round_graph_name" named="True">
+                    <property name="text" translatable="yes">None</property>
+                    <layout manager="grid">
+                      <property name="column">1</property>
+                      <property name="row">0</property>
+                    </layout>
+                  </object>
+                </child>
+              </object>
+            </child>
           </object>
         </child>
         <child>

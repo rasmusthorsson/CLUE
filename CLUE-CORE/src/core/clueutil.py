@@ -1,11 +1,30 @@
 import queue
 import sys
 import random
+import threading
 import time
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+
+class ClueCancellation:
+    """
+        Static class for handling cancellation requests in CLUE.
+    """
+    _cancellation_event = threading.Event()
+    
+    @staticmethod
+    def request_cancellation():
+        ClueCancellation._cancellation_event.set()
+
+    @staticmethod
+    def is_cancellation_requested():
+        return ClueCancellation._cancellation_event.is_set()
+
+    @staticmethod
+    def clear_cancellation():
+        ClueCancellation._cancellation_event.clear()
 
 class ClueLogger:
     """
@@ -91,6 +110,12 @@ class ClueLogger:
 #Base class for exceptions in CLUE
 class ClueException(Exception):
     pass
+
+class ClueCancelledException(ClueException):
+    """Exception raised when a CLUE operation is cancelled by user request"""
+    def __init__(self, message="Operation cancelled by user"):
+        self.message = message
+        super().__init__(self.message)
 
 #Utility class for extracting features from the raw data
 class FeatureExtractor:

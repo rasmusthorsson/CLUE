@@ -4,11 +4,12 @@ import os
 import subprocess
 from pathlib import Path
 import shutil
+import time
 
 import pandas as pd
 
 from core import clueutil
-from core.clueutil import ClueLogger as Logger
+from core.clueutil import ClueCancellation, ClueLogger as Logger
 
 #TODO Fix bug where one line is lost every clue round
 
@@ -228,8 +229,44 @@ class ClueRound:
         #Generate config-dependent components of call
         call += self.clueConfig.getOptimizeCallOpts()
 
-        subprocess.run(call)
+        proc = subprocess.Popen(call,
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.STDOUT, 
+                    text=True,
+                    bufsize=1)
         
+        try:
+            while proc.poll() is None:
+                if ClueCancellation.is_cancellation_requested():
+                    Logger.log("Cancelling parameter optimization...")
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                    raise clueutil.ClueCancelledException("Run Cancelled: The CLUE round was cancelled during parameter optimization.")
+
+                output = proc.stdout.readline()
+                if output:
+                    Logger.log(output.rstrip())
+                else:
+                    time.sleep(0.1)
+
+            remainingOutput = proc.stdout.read()
+            if remainingOutput:
+                for line in remainingOutput.splitlines():
+                    Logger.log(line.rstrip())
+
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+
         Logger.log("Reading best parameter optimization values...")
         paramOptFD = self.roundDirectory + "optimal_params.csv"
         paramOptDF = pd.read_csv(paramOptFD, header=0)
@@ -260,6 +297,9 @@ class ClueRound:
         Logger.log("Feature Selection File: " + str(self.featureSelectionFile))
         Logger.log("Cluster Selection File: " + str(self.clusterSelectionFile))
 
+        if ClueCancellation.is_cancellation_requested():
+            raise clueutil.ClueCancelledException("Run Cancelled: The CLUE round was cancelled before it could start.")
+
         #If param opt is selected we run the parameter optimizer first to set new config parameters
         if (int(self.clueConfig.paramOptimization) > 0):
             Logger.log("Running parameter optimizer with level: " + str(int(self.clueConfig.paramOptimization)) + "\n")
@@ -267,13 +307,43 @@ class ClueRound:
         
         call = self.buildCall(CLUECLUST)
 
-        proc = subprocess.run(call, 
+        proc = subprocess.Popen(call, 
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.STDOUT, 
                     text=True,
                     bufsize=1)
-        for line in proc.stdout.splitlines():
-            Logger.log(line + "\n", end="", flush=True)
+        
+        try:
+            while proc.poll() is None:
+                if ClueCancellation.is_cancellation_requested():
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                    raise clueutil.ClueCancelledException("Run Cancelled: The CLUE round was cancelled.")
+
+                output = proc.stdout.readline()
+                if output:
+                    Logger.log(output.rstrip())
+                else:
+                    time.sleep(0.1)
+            remainingOutput = proc.stdout.read()
+            if remainingOutput:
+                for line in remainingOutput.splitlines():
+                    Logger.log(line.rstrip)
+
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+
+        Logger.log("Round " + self.roundName + " completed successfully.\n")
 
 #A full run of Clue
 class ClueRun:
@@ -467,50 +537,60 @@ class ClueRun:
         self._getInputDataframe()
         self.getFeaturesDataframe()
     
+    def onStoppedRun(self):
+        Logger.logToFileOnly("onStoppedRun called")
+        #Unused for now, placeholder for future functionality
+
     def runNextRound(self):
         Logger.logToFileOnly("runNextRound called")
+        if ClueCancellation.is_cancellation_requested():
+            raise clueutil.ClueCancelledException("Run Cancelled: The CLUE round was cancelled before it could start.")
         if (not os.path.exists(self.CLUECLUST)):
             raise clueutil.ClueException("CLUECLUST jar file not found at: " + self.CLUECLUST)
         if (len(self.rounds) == 0):
             raise clueutil.ClueException("No rounds to run, exiting...")
         Logger.log("Running round " + str(self.__roundPointer + 1) + " of " + str(len(self.rounds)) + "...")
-        if (self.__roundPointer == 0):
-            self.setupRuns()
-            currentDF = self._getInputDataframe()
-            if (self.rounds[0].clueConfig.useFeatures):
-                currentDF = self.getFeaturesDataframe()
-            Logger.log("Filtering input data for round: " + self.rounds[0].roundName + "...")
-            newInputs = clueutil.InputFilter.filter(currentDF, 
-                                                    None, #No previous metadata FD
-                                                    None, #No previous clusters FD
-                                                    self.rounds[0].featureSelectionFile, 
-                                                    None  #No cluster selection file for first round
-                                        )
-            Path(self.rounds[0].roundDirectory).mkdir(exist_ok=True) #Build round directory
-            newInputs.to_csv(path_or_buf=self.rounds[0].inputFile, header=False, index=False)
-            prevRound = self.rounds[0]
-            prevRound.runRound(self.CLUECLUST)
-            self.__roundPointer += 1
-        elif (self.__roundPointer < len(self.rounds)):
-            currRound = self.rounds[self.__roundPointer]
-            currentDF = self._getInputDataframe()
-            if (currRound.clueConfig.useFeatures):
-                currentDF = self.getFeaturesDataframe()
-            prevRound = self.rounds[self.__roundPointer - 1]
-            prevMetadataFD = prevRound.roundDirectory + prevRound.metadataFile
-            prevClustersFD = prevRound.roundDirectory + prevRound.clustersFile
-            Logger.log("Filtering input data for round: " + currRound.roundName + "...")
-            newInputs = clueutil.InputFilter.filter(currentDF, 
-                                                    prevClustersFD, 
-                                                    prevMetadataFD, 
-                                                    currRound.featureSelectionFile, 
-                                                    currRound.clusterSelectionFile)
-            Path(currRound.roundDirectory).mkdir(exist_ok=True)
-            newInputs.to_csv(path_or_buf=currRound.inputFile, header=False, index=False)
-            currRound.runRound(self.CLUECLUST)
-            self.__roundPointer += 1
-        else:
-            raise clueutil.ClueException("All rounds have already been run, cannot run next round.")
+        try:
+            if (self.__roundPointer == 0):
+                self.setupRuns()
+                currentDF = self._getInputDataframe()
+                if (self.rounds[0].clueConfig.useFeatures):
+                    currentDF = self.getFeaturesDataframe()
+                Logger.log("Filtering input data for round: " + self.rounds[0].roundName + "...")
+                newInputs = clueutil.InputFilter.filter(currentDF, 
+                                                        None, #No previous metadata FD
+                                                        None, #No previous clusters FD
+                                                        self.rounds[0].featureSelectionFile, 
+                                                        None  #No cluster selection file for first round
+                                            )
+                Path(self.rounds[0].roundDirectory).mkdir(exist_ok=True) #Build round directory
+                newInputs.to_csv(path_or_buf=self.rounds[0].inputFile, header=False, index=False)
+                prevRound = self.rounds[0]
+                prevRound.runRound(self.CLUECLUST)
+                self.__roundPointer += 1
+            elif (self.__roundPointer < len(self.rounds)):
+                currRound = self.rounds[self.__roundPointer]
+                currentDF = self._getInputDataframe()
+                if (currRound.clueConfig.useFeatures):
+                    currentDF = self.getFeaturesDataframe()
+                prevRound = self.rounds[self.__roundPointer - 1]
+                prevMetadataFD = prevRound.roundDirectory + prevRound.metadataFile
+                prevClustersFD = prevRound.roundDirectory + prevRound.clustersFile
+                Logger.log("Filtering input data for round: " + currRound.roundName + "...")
+                newInputs = clueutil.InputFilter.filter(currentDF, 
+                                                        prevClustersFD, 
+                                                        prevMetadataFD, 
+                                                        currRound.featureSelectionFile, 
+                                                        currRound.clusterSelectionFile)
+                Path(currRound.roundDirectory).mkdir(exist_ok=True)
+                newInputs.to_csv(path_or_buf=currRound.inputFile, header=False, index=False)
+                currRound.runRound(self.CLUECLUST)
+                self.__roundPointer += 1
+            else:
+                raise clueutil.ClueException("All rounds have already been run, cannot run next round.")
+        except clueutil.ClueCancelledException as e:
+            self.onStoppedRun()
+            raise e
         oldRoundPointer = self.__roundPointer
         if (self.__roundPointer == len(self.rounds)):
             outputWriteDirectory = str(self.targetRunDirectory) + "/" + str(self.outputDirectory)
@@ -534,6 +614,8 @@ class ClueRun:
         currentRound = 0
         while (currentRound < len(self.rounds)):
             currentRound = self.runNextRound()
+
+
 
     def runRemainder(self):
         Logger.logToFileOnly("runRemainder called")

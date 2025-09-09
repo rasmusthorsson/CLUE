@@ -38,14 +38,20 @@ Evaluate whether the copy, write and reads of the program are correct and safe
 
 TODO-list for things relating to the logic of the core program
 
+### Logging Verbosity
+Add logging verbosity
+
+### Go Through All TODOs In The Code
+There are scattered TODOs in the code, go through them and fix them
+
+### Clean Up Code
+Add comments to everything not commented, split the code in the files into sections, fix naming conventions
+
 ### Delete Temp Files Option
 Add an option for deleting temporary files (intermediate clustering rounds, intermediate input data etc)
 
 ### Exception Handling
 Toplevel exception handling
-
-### Smart prints?
-Utility for printing things in a mode advanced manner than standard prints
 
 </details>
 
@@ -56,8 +62,8 @@ Utility for printing things in a mode advanced manner than standard prints
 
 TODO-list for things relating to the UI
 
-### Saving and Loading Runs
-XML converter for saving and loading runs into/from XML files
+### Current Round Pointer
+Add a visible pointer to the current round to be ran
 
 ### Error Textbox
 Special textbox for displaying unrecovarable errors
