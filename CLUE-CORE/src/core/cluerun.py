@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 import shutil
 import time
+from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -30,35 +31,66 @@ class ParameterOptimizationLevel(IntEnum):
     EXPLORATION = 2
 #-------------------------------------------------------------------------
 
-#Configurations relating to how to run the clustering subprocess
 class ClueConfig:
+    """
+    Configuration settings for CLUE clustering subprocess.
     
-    #Enums
-    algorithm = None            
-    distanceMetric = None       
-    paramOptimization = None
+    Attributes:
+        algorithm: Clustering algorithm to use (DBSCAN, IPLSHDBSCAN, KMEANS)
+        distanceMetric: Distance metric for clustering (EUCLIDEAN, ANGULAR, DTW)
+        paramOptimization: Level of parameter optimization (NONE, KDISTANCE, EXPLORATION)
+        epsilon: DBSCAN epsilon parameter for neighborhood distance
+        minPts: DBSCAN minimum points parameter for core points
+        hyperplanes: Number of hyperplanes for LSH-based algorithms
+        hashtables: Number of hash tables for LSH-based algorithms
+        kClusters: Number of clusters for K-means algorithm
+        standardize: Whether to standardize data before clustering
+        useFeatures: Whether to use extracted features instead of raw data
+        threads: Number of threads for parallel processing
+        window: Window size for DTW distance metric
+        callDictALG: Dictionary mapping algorithms to command line arguments
+        callDictDM: Dictionary mapping distance metrics to command line arguments
+    """
     
-    #Numericals
-    epsilon = None
-    minPts = None
-    hyperplanes = None
-    hashtables = None
-    kClusters = None
-    threads = None
+    def __init__(self, 
+                 algorithm: Algorithm = Algorithm.DBSCAN, 
+                 distanceMetric: DistanceMetric = DistanceMetric.EUCLIDEAN,
+                 paramOptimization: ParameterOptimizationLevel = ParameterOptimizationLevel.NONE,
+                 epsilon: float = 1,
+                 minPts: int = 20,
+                 hyperplanes: int = 5,
+                 hashtables: int = 10,
+                 kClusters: int = 8,
+                 standardize: bool = False,
+                 useFeatures: bool = False,
+                 threads: int = 4,
+                 window: int = 20
+                 ):
+        self.algorithm: Algorithm = algorithm
+        self.distanceMetric: DistanceMetric = distanceMetric
+        self.paramOptimization: ParameterOptimizationLevel = paramOptimization
+        self.epsilon: float = epsilon
+        self.minPts: int = minPts
+        self.hyperplanes: int = hyperplanes
+        self.hashtables: int = hashtables
+        self.kClusters: int = kClusters
+        self.standardize: bool = standardize
+        self.useFeatures: bool = useFeatures
+        self.threads: int = threads
+        self.window: int = window
+        
+        self.callDictALG: Dict[int, List[str]] = {}
+        self.callDictDM: Dict[int, List[str]] = {}
+        
+        self._refreshCallOpts()
 
-    #Booleans
-    standardize = None
-    useFeatures = None
-    
-    #Dictionaries for constructing the Java call to CLUECLUST for clustering stage
-    callDictALG = {}
-    callDictDM = {}
-    
-    #Refreshes the dictionaries containing the call information, is called prior to returning the full call
-    #to ensure correct variable calls
-    def refreshCallOpts(self):
-        Logger.logToFileOnly("refreshCallOpts called")
-        #Algorithm dict
+    def _refreshCallOpts(self):
+        """
+            Refreshes the dictionaries containing the call information, is called prior to returning the full call to ensure correct variable calls.
+        """
+        Logger.logToFileOnly("_refreshCallOpts called")
+
+        # Algorithm dict
         self.callDictALG[int(Algorithm.DBSCAN)] = [
                                                    "-c", "vanilla", 
                                                    "-e", str(float(self.epsilon)), 
@@ -76,7 +108,7 @@ class ClueConfig:
                                                    "-k", str(int(self.kClusters))
                                                    ]
 
-        #Distance metric dict
+        # Distance metric dict
         self.callDictDM[int(DistanceMetric.EUCLIDEAN)] = []
         self.callDictDM[int(DistanceMetric.ANGULAR)] = ["-a"]
         self.callDictDM[int(DistanceMetric.DTW)] = [
@@ -84,38 +116,12 @@ class ClueConfig:
                                                     "-window", str(int(self.window))
                                                     ]
 
-    def __init__(self, 
-                 algorithm=Algorithm.DBSCAN, 
-                 distanceMetric=DistanceMetric.EUCLIDEAN,
-                 paramOptimization=ParameterOptimizationLevel.NONE,
-                 epsilon=1,
-                 minPts=20,
-                 hyperplanes=5,
-                 hashtables=10,
-                 kClusters=8,
-                 standardize=False,
-                 useFeatures=False,
-                 threads=4,
-                 window=20
-                 ):
-        self.algorithm = algorithm
-        self.distanceMetric = distanceMetric
-        self.paramOptimization=paramOptimization
-        self.epsilon=epsilon
-        self.minPts=minPts
-        self.hyperplanes=hyperplanes
-        self.hashtables=hashtables
-        self.kClusters=kClusters
-        self.standardize = standardize
-        self.threads = threads
-        self.window = window
-        self.useFeatures = useFeatures
-        self.refreshCallOpts
-        
-    #Generate config-dependent components of call for regular clustering usage
-    def getConfigCallOpts(self):
-        Logger.logToFileOnly("getConfigCallOpts called")
-        self.refreshCallOpts()
+    def getClusteringCallOpts(self):
+        """
+            Returns the command line options based on the current configuration settings.
+        """
+        Logger.logToFileOnly("getClusteringCallOpts called")
+        self._refreshCallOpts()
         callOpts = []
         callOpts += self.callDictALG[self.algorithm]
         callOpts += self.callDictDM[self.distanceMetric]
@@ -123,10 +129,12 @@ class ClueConfig:
             callOpts.append("-standardize")
         return callOpts
 
-    #Generate config-dependent components of call for parameter optimization usage
     def getOptimizeCallOpts(self):
+        """
+            Returns the command line options specifically for parameter optimization based on the current configuration settings.
+        """
         Logger.logToFileOnly("getOptimizeCallOpts called")
-        self.refreshCallOpts()
+        self._refreshCallOpts()
         callOpts = ["-c", "optimize"]
         callOpts += self.callDictDM[self.distanceMetric]
         callOpts.append("-o")
@@ -135,33 +143,65 @@ class ClueConfig:
             callOpts.append("-standardize")
         return callOpts
 
-
-#An individual round is defined by files connected to that round and a configuration for the subprocess
 class ClueRound:
-
-    roundName = None            #Name of round
-    directory = None            #Base directory of the global run
-    roundDirectory = None       #Directory for the round itself
-    clueConfig = None           #Config for the round
+    """
+    An individual round of CLUE clustering analysis.
     
-    inputFile = None            #File descriptor to the file containing the input data for the clustering round
-    clustersFile = None         #File descriptor to direct the clustering results
-    metadataFile = None         #File descriptor to direct the metadata results
-    featureSelectionFile = ""   #File descriptor for the feature selection file
-    clusterSelectionFile = ""   #File descriptor for the cluster selection file
+    Attributes:
+        roundName: Name identifier for this round
+        directory: Base directory of the global run
+        clueConfig: Configuration settings for the clustering subprocess
+        featureSelectionFile: Path to feature selection file for this round
+        clusterSelectionFile: Path to cluster selection file for this round
+
+    Properties:
+        inputFile: Path to input data file for this clustering round
+        clustersFile: Filename for clustering results output
+        metadataFile: Filename for metadata results output
+        roundDirectory: Full path to this round's directory
+    """
 
     def __init__(self, 
-                 roundName, 
-                 directory, 
-                 featureSelectionFile, 
-                 clusterSelectionFile,
-                 clueConfig,
+                 roundName: str, 
+                 directory: str, 
+                 featureSelectionFile: str, 
+                 clusterSelectionFile: str,
+                 clueConfig: ClueConfig,
                  ):
+        # Initialize all instance attributes with type hints
+        self.roundName: Optional[str] = None
+        self.directory: Optional[str] = None
+        self.clueConfig: Optional[ClueConfig] = None
+        self.featureSelectionFile: str = ""
+        self.clusterSelectionFile: str = ""
+
+        self._roundDirectory: Optional[str] = None
+        self._inputFile: Optional[str] = None
+        self._clustersFile: Optional[str] = None
+        self._metadataFile: Optional[str] = None
+
+        # Set initial round settings
         self.setRound(roundName, 
                       directory, 
                       featureSelectionFile, 
                       clusterSelectionFile,
                       clueConfig)
+        
+    @property
+    def inputFile(self) -> str:
+        return self._inputFile
+    
+    @property
+    def clustersFile(self) -> str:
+        return self._clustersFile
+    
+    @property
+    def metadataFile(self) -> str:
+        return self._metadataFile
+    
+    @property
+    def roundDirectory(self) -> str:
+        return self._roundDirectory
         
     #Change all round settings in the given round
     def setRound(self, 
@@ -170,18 +210,23 @@ class ClueRound:
                  featureSelectionFile, 
                  clusterSelectionFile, 
                  clueConfig):
+        """
+            Sets or updates the round settings.
+        """
         Logger.logToFileOnly("setRound called")
         self.roundName = roundName
         self.directory = directory
-        self.roundDirectory = str(directory) + "/" + roundName + "/"
+        self._roundDirectory = str(directory) + "/" + roundName + "/"
         self.featureSelectionFile = featureSelectionFile or ""
         self.clusterSelectionFile = clusterSelectionFile or ""
         self.clueConfig = clueConfig
 
         #TODO Fix inconsistency in managing file descriptors
-        self.clustersFile = "clusters.csv"
-        self.metadataFile = "metadata.csv"
-        self.inputFile = self.roundDirectory + "input.csv"
+        # Currently the file descriptors are not fully qualified and are instead joined with the round directory when they
+        # are used by the user. This is not ideal and should be fixed but has dependencies in other parts of the code.
+        self._clustersFile = "clusters.csv"
+        self._metadataFile = "metadata.csv"
+        self._inputFile = self.roundDirectory + "input.csv"
 
     def clearRoundDirectory(self):
         """
@@ -190,38 +235,45 @@ class ClueRound:
         """
         #TODO Add removal of files generated from the parameter optimizer
         Logger.logToFileOnly("clearRoundDirectory called")
-        if (os.path.exists(self.roundDirectory)):
-            for file in [self.clustersFile, self.metadataFile, "input.csv"]:
-                filePath = self.roundDirectory + file
+        if (os.path.exists(self._roundDirectory)):
+            for file in [self._clustersFile, self._metadataFile, "input.csv"]:
+                filePath = self._roundDirectory + file
                 if (os.path.exists(filePath)):
                     os.remove(filePath)
                     Logger.log("Removed file: " + filePath)
         else:
-            Logger.log("Round directory does not exist, nothing to clear: " + self.roundDirectory)
+            Logger.log("Round directory does not exist, nothing to clear: " + self._roundDirectory)
     
-    #Update the round directory to a new directory
     def updateDirectory(self, directory):
+        """
+            Updates the required round variables when a new directory is set.
+        """
         Logger.logToFileOnly("updateDirectory called")
         self.directory = directory
-        self.roundDirectory = str(directory) + "/" + self.roundName + "/"
-        self.inputFile = self.roundDirectory + "input.csv"
+        self._roundDirectory = str(directory) + "/" + self.roundName + "/"
+        self._inputFile = self._roundDirectory + "input.csv"
 
-    #Builds the subprocess call based off the configuration of the round
-    def buildCall(self, CLUECLUST):
-        Logger.logToFileOnly("buildCall called")
+    def _buildCall(self, CLUECLUST):
+        """
+            Builds the subprocess call based off the configuration of the round.
+        """
+        Logger.logToFileOnly("_buildCall called")
+
         #Base call, always the same regardless of config
-        call = ["java", "-jar", CLUECLUST, "-f", self.inputFile, 
-                "-d", self.roundDirectory, "-output", self.clustersFile,
-                "-metadata", self.metadataFile, "-t", str(self.clueConfig.threads)]
+        call = ["java", "-jar", CLUECLUST, "-f", self._inputFile,
+                "-d", self._roundDirectory, "-output", self._clustersFile,
+                "-metadata", self._metadataFile, "-t", str(self.clueConfig.threads)]
 
         #Generate config-dependent components of call
-        call += self.clueConfig.getConfigCallOpts()
+        call += self.clueConfig.getClusteringCallOpts()
         return call
 
-    
-    #Special case for building a call using the parameter optimizer
-    def runParamOptimizer(self, CLUECLUST):
-        Logger.logToFileOnly("runParamOptimizer called")
+    def _runParamOptimizer(self, CLUECLUST):
+        """
+            Runs the parameter optimizer and updates the clueConfig with the best parameters found. Uses the CLUECLUST jar file.
+        """
+        Logger.logToFileOnly("_runParamOptimizer called")
+
         #Base call, always the same regardless of config
         call = ["java", "-jar", CLUECLUST, "-f", self.inputFile,
                 "-d", self.roundDirectory, "-c", "optimize", "-o", str(int(self.clueConfig.paramOptimization))]
@@ -235,9 +287,11 @@ class ClueRound:
                     text=True,
                     bufsize=1)
         
+        # The subprocess is non-blocking, so we poll it for output and check for cancellation. 
+        # This also ensures that the output is logged in real-time.
         try:
             while proc.poll() is None:
-                if ClueCancellation.is_cancellation_requested():
+                if ClueCancellation.isCancellationRequested():
                     Logger.log("Cancelling parameter optimization...")
                     proc.terminate()
                     try:
@@ -258,6 +312,7 @@ class ClueRound:
                 for line in remainingOutput.splitlines():
                     Logger.log(line.rstrip())
 
+        # Ensure the process is terminated if it is still running
         finally:
             if proc.poll() is None:
                 proc.terminate()
@@ -267,8 +322,9 @@ class ClueRound:
                     proc.kill()
                     proc.wait()
 
+        #Read the optimal parameters from the output file and update the clueConfig
         Logger.log("Reading best parameter optimization values...")
-        paramOptFD = self.roundDirectory + "optimal_params.csv"
+        paramOptFD = self._roundDirectory + "optimal_params.csv"
         paramOptDF = pd.read_csv(paramOptFD, header=0)
         if (len(paramOptDF) > 0):
             bestParam = paramOptDF.iloc[0]
@@ -285,37 +341,41 @@ class ClueRound:
         Logger.log("HashTables = " + str(self.clueConfig.hashtables) + "\n")
         Logger.log("Hyperplanes = " + str(self.clueConfig.hyperplanes) + "\n")
 
-    #Runs the round with a specified CLUECLUST jar file
     def runRound(self, CLUECLUST):
+        """
+            Runs the clustering round as configured, including optional parameter optimization. Uses the CLUECLUST jar file.
+        """
         Logger.logToFileOnly("runRound called")
         Logger.log("Running round: " + self.roundName + "...")
         Logger.log("Using CLUECLUST jar file: " + CLUECLUST)
-        Logger.log("Target round directory: " + self.roundDirectory)
-        Logger.log("Input File: " + self.inputFile)
-        Logger.log("Clusters File: " + self.roundDirectory + self.clustersFile)
-        Logger.log("Metadata File: " + self.roundDirectory + self.metadataFile)
+        Logger.log("Target round directory: " + self._roundDirectory)
+        Logger.log("Input File: " + self._inputFile)
+        Logger.log("Clusters File: " + self._roundDirectory + self._clustersFile)
+        Logger.log("Metadata File: " + self._roundDirectory + self._metadataFile)
         Logger.log("Feature Selection File: " + str(self.featureSelectionFile))
         Logger.log("Cluster Selection File: " + str(self.clusterSelectionFile))
 
-        if ClueCancellation.is_cancellation_requested():
+        if ClueCancellation.isCancellationRequested():
             raise clueutil.ClueCancelledException("Run Cancelled: The CLUE round was cancelled before it could start.")
 
         #If param opt is selected we run the parameter optimizer first to set new config parameters
         if (int(self.clueConfig.paramOptimization) > 0):
             Logger.log("Running parameter optimizer with level: " + str(int(self.clueConfig.paramOptimization)) + "\n")
-            self.runParamOptimizer(CLUECLUST)
+            self._runParamOptimizer(CLUECLUST)
         
-        call = self.buildCall(CLUECLUST)
+        call = self._buildCall(CLUECLUST)
 
         proc = subprocess.Popen(call, 
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.STDOUT, 
                     text=True,
                     bufsize=1)
-        
+
+        # The subprocess is non-blocking, so we poll it for output and check for cancellation.
+        # This also ensures that the output is logged in real-time.
         try:
             while proc.poll() is None:
-                if ClueCancellation.is_cancellation_requested():
+                if ClueCancellation.isCancellationRequested():
                     proc.terminate()
                     try:
                         proc.wait(timeout=5)
@@ -332,8 +392,9 @@ class ClueRound:
             remainingOutput = proc.stdout.read()
             if remainingOutput:
                 for line in remainingOutput.splitlines():
-                    Logger.log(line.rstrip)
+                    Logger.log(line.rstrip())
 
+        # Ensure the process is terminated if it is still running
         finally:
             if proc.poll() is None:
                 proc.terminate()
@@ -345,89 +406,86 @@ class ClueRound:
 
         Logger.log("Round " + self.roundName + " completed successfully.\n")
 
-#A full run of Clue
 class ClueRun:
-    rounds = []                     #Rounds to run
-    runName = None                  #Name of run
-    baseFile = None                 #Base input file, raw data
-    baseFeaturesFile = None         #Base file containing features, does not need to exist prior to running, will be created in run directory
-    targetRunDirectory = None       #Run directory
-    baseDirectory = None            #Base directory
-    outputDirectory = None          #Output directory for the final results, will be created if it does not exist
-    interactive = None              #If false, will display graphs directly instead of saving them to a file
-    CLUECLUST = None                #Path to the CLUECLUST jar file, must be set before running
-    __roundPointer = 0               #Pointer to the current round being ran 
+    """
+    A full run of CLUE clustering analysis.
+    
+    Attributes:
+        rounds: List of ClueRound objects to run in sequence
+        runName: Name of this run
+        baseFile: Path to the base input file containing raw data
+        baseDirectory: Base directory for the run
+        outputDirectory: Directory name for final results
+        interactive: Whether to display graphs directly vs save to file
+        CLUECLUST: Path to the CLUECLUST jar file
 
-    _inputDFCache = None        #Cache for the input dataframe to avoid re-reading from disk multiple times
-    _baseFeaturesDFCache = None  #Cache for the base features dataframe to avoid re-reading from disk multiple times
-    _cacheValid = False          #Flag to indicate if the cache is valid or needs to be refreshed
+    Properties:
+        targetRunDirectory: Directory where run outputs are stored
+        baseFeaturesFile: Path to features file (created during run)
+        roundPointer: Index of the current round being run
+    """
+    
+    def __init__(self, runName: str, baseFile: str, baseDirectory: str, 
+                 outputDirectory: str = "output", interactive: bool = False, 
+                 CLUECLUST: str = "CLUECLUST.jar"):
 
+        # Attributes
+        self.rounds: List[ClueRound] = []                    # Rounds to run
+        self.runName: str = runName                          # Name of run
+        self.baseFile: str = baseFile                        # Base input file, raw data
+        self.baseDirectory: str = baseDirectory              # Base directory
+        self.outputDirectory: str = outputDirectory          # Output directory for final results
+        self.interactive: bool = interactive                 # Display graphs directly vs save to file
+        self.CLUECLUST: str = CLUECLUST                      # Path to CLUECLUST jar file
 
-    def __init__(self, runName, baseFile, baseDirectory, outputDirectory="output", interactive=False, CLUECLUST="CLUECLUST.jar"):
-        self.runName = runName
-        self.baseFile = baseFile
-        self.baseDirectory = baseDirectory
-        self.outputDirectory = outputDirectory
-        self.interactive = interactive
-        self.CLUECLUST = CLUECLUST
+        # Properties
+        self._baseFeaturesFile: Optional[str] = None                        # Features file (created in run directory)
+        self._targetRunDirectory = self.baseDirectory + "/" + self.runName  # Run directory
+        self._roundPointer: int = 0                                         # Pointer to current round being run
+        
+        # Cache attributes
+        self._inputDFCache: Optional[pd.DataFrame] = None           # Input dataframe cache
+        self._baseFeaturesDFCache: Optional[pd.DataFrame] = None    # Features dataframe cache
+        self._cacheValid: bool = False                              # Cache validity flag
 
-        self.targetRunDirectory = self.baseDirectory + "/" + self.runName
+    @property
+    def baseFeaturesFile(self) -> Optional[str]:
+        return self._baseFeaturesFile
+    
+    @property
+    def targetRunDirectory(self) -> str:
+        return self._targetRunDirectory
 
-    #For building a round and adding it to the end of the rounds to be ran
     def buildRound(self, roundName, featuresFile, selectionFile, clueConfig):
+        """
+            Builds a new round and appends it to the list of rounds to be ran.
+        """
         Logger.logToFileOnly("buildRound called")
         self.rounds.append(ClueRound(roundName, 
-                                     self.targetRunDirectory, 
+                                     self._targetRunDirectory, 
                                      featuresFile, 
                                      selectionFile,
                                      clueConfig
                                      ))
     
     def setRound(self, roundName, featureSelectionFile, clusterSelectionFile, clueConfig):
+        """
+            Sets or updates the round settings for an existing round by name.
+        """
         Logger.logToFileOnly("ClueRun.setRound called")
-        #Change all round settings in the given round
         for round in self.rounds:
             if (round.roundName == roundName):
                 round.setRound(roundName, 
-                               self.targetRunDirectory,
+                               self._targetRunDirectory,
                                featureSelectionFile, 
                                clusterSelectionFile,
                                clueConfig)
                 return
-            
-    def getRoundPointer(self):
-        Logger.logToFileOnly("getRoundPointer called")
-        return self.__roundPointer
 
-    def updateBaseFile(self, baseFile):
-        Logger.logToFileOnly("updateBaseFile called")
-        if baseFile == self.baseFile:
-            return
-        self.resetRun()
-        self.baseFile = baseFile
-
-    #Update the base directory to a new directory after directory change
-    def updateBaseDirectory(self, baseDirectory):
-        Logger.logToFileOnly("updateBaseDirectory called")
-        if baseDirectory == self.baseDirectory:
-            return
-        self.resetRun()
-        self.baseDirectory = baseDirectory
-        self.targetRunDirectory = self.baseDirectory + "/" + self.runName
-        for round in self.rounds:
-            round.updateDirectory(self.targetRunDirectory)
-
-    #Update the target run directory to a new directory after run name change
-    def updateRunName(self, runName):
-        Logger.logToFileOnly("updateRunName called")
-        self.resetRun()
-        self.runName = runName
-        self.targetRunDirectory = self.baseDirectory + "/" + self.runName
-        for round in self.rounds:
-            round.updateDirectory(self.targetRunDirectory)
-
-    #Moves a round up in the listst of rounds to be ran, if it is not already at the top.
     def moveRoundUp(self, roundName):
+        """
+            Moves a round up in the list of rounds to be ran, if it is not already at the top. Resets run if successful.
+        """
         Logger.logToFileOnly("moveRoundUp called")
         for i in range(1, len(self.rounds)):
             if (self.rounds[i].roundName == roundName):
@@ -440,8 +498,10 @@ class ClueRun:
                     raise clueutil.ClueException("Round with name " + roundName + " is already at the top, cannot move up.")
         raise clueutil.ClueException("Round with name " + roundName + " not found, cannot move up.")
 
-    #Moves a round down in the list of rounds to be ran, if it is not already at the bottom.
     def moveRoundDown(self, roundName):
+        """
+            Moves a round down in the list of rounds to be ran, if it is not already at the bottom. Resets run if successful.
+        """
         Logger.logToFileOnly("moveRoundDown called")
         for i in range(len(self.rounds) - 1):
             if (self.rounds[i].roundName == roundName):
@@ -453,33 +513,76 @@ class ClueRun:
                 else:
                     raise clueutil.ClueException("Round with name " + roundName + " is already at the bottom, cannot move down.")
         raise clueutil.ClueException("Round with name " + roundName + " not found, cannot move down.")
-
-    #Get the index of a round by its name
-    def getRoundIndex(self, roundName):
-        Logger.logToFileOnly("getRoundIndex called")
-        for i in range(len(self.rounds)):
-            if (self.rounds[i].roundName == roundName):
-                return i
-        raise clueutil.ClueException("Round with name " + roundName + " not found, cannot get index.")
-
-    #Get a round by its name
-    def getRound(self, roundName):
-        Logger.logToFileOnly("getRound called")
-        for round in self.rounds:
-            if (round.roundName == roundName):
-                return round
-        return None
-        
-    #Remove a round by its name
+    
     def removeRound(self, roundName):
+        """
+            Removes a round from the list of rounds to be ran by its name. Resets run if successful.
+        """
         Logger.logToFileOnly("removeRound called")
-        #Remove a round from the run
         for i in range(len(self.rounds)):
             if (self.rounds[i].roundName == roundName):
                 del self.rounds[i]
                 self.resetRun()
                 return
         raise clueutil.ClueException("Round with name " + roundName + " not found, cannot remove.")
+
+    def updateBaseFile(self, baseFile):
+        """
+            Updates the baseFile and resets run if it has changed.
+        """
+        Logger.logToFileOnly("updateBaseFile called")
+        if baseFile == self.baseFile:
+            return
+        self.resetRun()
+        self.baseFile = baseFile
+
+    def updateBaseDirectory(self, baseDirectory):
+        """
+            Updates the related variables when a new baseDirectory is set.
+        """
+        Logger.logToFileOnly("updateBaseDirectory called")
+        if baseDirectory == self.baseDirectory:
+            return
+        self.resetRun()
+        self.baseDirectory = baseDirectory
+        self._targetRunDirectory = self.baseDirectory + "/" + self.runName
+        for round in self.rounds:
+            round.updateDirectory(self._targetRunDirectory)
+
+    def updateRunName(self, runName):
+        """
+            Updates the related variables when a new runName is set.
+        """
+        Logger.logToFileOnly("updateRunName called")
+        self.resetRun()
+        self.runName = runName
+        self._targetRunDirectory = self.baseDirectory + "/" + self.runName
+        for round in self.rounds:
+            round.updateDirectory(self._targetRunDirectory)
+    
+    def getRoundPointer(self):
+        Logger.logToFileOnly("getRoundPointer called")
+        return self._roundPointer
+
+    def getRoundIndex(self, roundName):
+        """
+            Returns the index of a round by its name.
+        """
+        Logger.logToFileOnly("getRoundIndex called")
+        for i in range(len(self.rounds)):
+            if (self.rounds[i].roundName == roundName):
+                return i
+        raise clueutil.ClueException("Round with name " + roundName + " not found, cannot get index.")
+
+    def getRound(self, roundName):
+        """
+            Returns a round by its name, or None if not found.
+        """
+        Logger.logToFileOnly("getRound called")
+        for round in self.rounds:
+            if (round.roundName == roundName):
+                return round
+        return None
     
     def clearRunDirectory(self):
         """
@@ -490,15 +593,19 @@ class ClueRun:
             round.clearRoundDirectory()
     
     def _loadSharedData(self):
+        """
+            Loads the share data variables if the cache is not valid. This includes generating the base features file.
+        """
         Logger.logToFileOnly("ClueRun._loadSharedData called")
         if (not self._cacheValid):
             Logger.log("Loading input data from file: " + self.baseFile)
             self._inputDFCache = pd.read_csv(self.baseFile)
+
             Logger.log("Building base features file...")
-            self.baseFeaturesFile = self.targetRunDirectory + "/baseFeatures.csv"
+            self._baseFeaturesFile = self._targetRunDirectory + "/baseFeatures.csv"
             self._baseFeaturesDFCache = clueutil.FeatureExtractor.extractFromDataFrame(self._inputDFCache)
-            self._baseFeaturesDFCache.to_csv(self.baseFeaturesFile, index=False)
-            Logger.log("baseFeatures file written to " + self.baseFeaturesFile)
+            self._baseFeaturesDFCache.to_csv(self._baseFeaturesFile, index=False)
+            Logger.log("baseFeatures file written to " + self._baseFeaturesFile)
 
             self._cacheValid = True
     
@@ -513,49 +620,65 @@ class ClueRun:
         self._loadSharedData()
         return self._inputDFCache
     
-    def getFeaturesDataframe(self):
-        Logger.logToFileOnly("ClueRun.getFeaturesDataframe called")
+    def _getFeaturesDataframe(self):
+        Logger.logToFileOnly("ClueRun._getFeaturesDataframe called")
         self._loadSharedData()
         return self._baseFeaturesDFCache
 
-    def reset__roundPointer(self):
-        Logger.logToFileOnly("reset__roundPointer called")
-        self.__roundPointer = 0
+    def _resetRoundPointer(self):
+        Logger.logToFileOnly("_resetRoundPointer called")
+        self._roundPointer = 0
+
+    def _setupRun(self):
+        """
+            Sets up the run directory and loads the input data and features dataframes.
+        """
+        Logger.logToFileOnly("_setupRun called")
+        Logger.log("Setting up run: " + self.runName + "...")
+        self._resetRoundPointer()
+        Path(self._targetRunDirectory).mkdir(parents=True, exist_ok=True)
+        self._getInputDataframe()
+        self._getFeaturesDataframe()
 
     def resetRun(self):
+        """
+            Resets the run to its initial state, starting at round 0 and invalidating the cache.
+        """
         Logger.logToFileOnly("resetRun called")
         Logger.log("Resetting run to initial state...")
-        self.reset__roundPointer()
+        self._resetRoundPointer()
         self._invalidateCache()
         #self.clearRunDirectory()
 
-    def setupRuns(self):
-        Logger.logToFileOnly("setupRuns called")
-        Logger.log("Setting up run: " + self.runName + "...")
-        self.reset__roundPointer()
-        Path(self.targetRunDirectory).mkdir(parents=True, exist_ok=True)
-        self._getInputDataframe()
-        self.getFeaturesDataframe()
-    
-    def onStoppedRun(self):
+    def _onStoppedRun(self):
         Logger.logToFileOnly("onStoppedRun called")
         #Unused for now, placeholder for future functionality
 
     def runNextRound(self):
+        """
+            Runs the next round in the list of rounds to be ran. If all rounds have been run, writes final output files and resets the run.
+            Returns the index of the round that was just run, or the total number of rounds if the run completed.
+        """
         Logger.logToFileOnly("runNextRound called")
-        if ClueCancellation.is_cancellation_requested():
+        if ClueCancellation.isCancellationRequested():
             raise clueutil.ClueCancelledException("Run Cancelled: The CLUE round was cancelled before it could start.")
         if (not os.path.exists(self.CLUECLUST)):
             raise clueutil.ClueException("CLUECLUST jar file not found at: " + self.CLUECLUST)
         if (len(self.rounds) == 0):
             raise clueutil.ClueException("No rounds to run, exiting...")
-        Logger.log("Running round " + str(self.__roundPointer + 1) + " of " + str(len(self.rounds)) + "...")
+        
+        Logger.log("Running round " + str(self._roundPointer + 1) + " of " + str(len(self.rounds)) + "...")
         try:
-            if (self.__roundPointer == 0):
-                self.setupRuns()
+
+            # The first round runs with no previous metadata or clusters and requires setup of the run
+            if (self._roundPointer == 0):
+
+                self._setupRun()
+
                 currentDF = self._getInputDataframe()
                 if (self.rounds[0].clueConfig.useFeatures):
-                    currentDF = self.getFeaturesDataframe()
+                    currentDF = self._getFeaturesDataframe()
+
                 Logger.log("Filtering input data for round: " + self.rounds[0].roundName + "...")
                 newInputs = clueutil.InputFilter.filter(currentDF, 
                                                         None, #No previous metadata FD
@@ -567,33 +690,41 @@ class ClueRun:
                 newInputs.to_csv(path_or_buf=self.rounds[0].inputFile, header=False, index=False)
                 prevRound = self.rounds[0]
                 prevRound.runRound(self.CLUECLUST)
-                self.__roundPointer += 1
-            elif (self.__roundPointer < len(self.rounds)):
-                currRound = self.rounds[self.__roundPointer]
+                self._roundPointer += 1
+            
+            # Subsequent rounds use the previous round's metadata and clusters
+            elif (self._roundPointer < len(self.rounds)):
+
+                currRound = self.rounds[self._roundPointer]
+
                 currentDF = self._getInputDataframe()
                 if (currRound.clueConfig.useFeatures):
-                    currentDF = self.getFeaturesDataframe()
-                prevRound = self.rounds[self.__roundPointer - 1]
+                    currentDF = self._getFeaturesDataframe()
+                
+                prevRound = self.rounds[self._roundPointer - 1]
                 prevMetadataFD = prevRound.roundDirectory + prevRound.metadataFile
                 prevClustersFD = prevRound.roundDirectory + prevRound.clustersFile
+
                 Logger.log("Filtering input data for round: " + currRound.roundName + "...")
                 newInputs = clueutil.InputFilter.filter(currentDF, 
                                                         prevClustersFD, 
                                                         prevMetadataFD, 
                                                         currRound.featureSelectionFile, 
                                                         currRound.clusterSelectionFile)
+                
                 Path(currRound.roundDirectory).mkdir(exist_ok=True)
                 newInputs.to_csv(path_or_buf=currRound.inputFile, header=False, index=False)
                 currRound.runRound(self.CLUECLUST)
-                self.__roundPointer += 1
+                self._roundPointer += 1
             else:
                 raise clueutil.ClueException("All rounds have already been run, cannot run next round.")
         except clueutil.ClueCancelledException as e:
-            self.onStoppedRun()
+            self._onStoppedRun()
             raise e
-        oldRoundPointer = self.__roundPointer
-        if (self.__roundPointer == len(self.rounds)):
-            outputWriteDirectory = str(self.targetRunDirectory) + "/" + str(self.outputDirectory)
+        
+        oldRoundPointer = self._roundPointer
+        if (self._roundPointer == len(self.rounds)):
+            outputWriteDirectory = str(self._targetRunDirectory) + "/" + str(self.outputDirectory)
             Logger.log("Writing output files to directory: " + outputWriteDirectory + "\n")
             Path(outputWriteDirectory).mkdir(exist_ok=True)
             finalRound = self.rounds[len(self.rounds) - 1]
@@ -605,8 +736,10 @@ class ClueRun:
             self.resetRun()
         return oldRoundPointer
 
-    #Main run function
     def runFromBeginning(self):
+        """
+            Starts the run from the beginning, resetting any previous state.
+        """
         Logger.logToFileOnly("run called")
         Logger.log("Beginning full run of Clue...")
         Logger.log("Total rounds to run: " + str(len(self.rounds)))
@@ -615,12 +748,13 @@ class ClueRun:
         while (currentRound < len(self.rounds)):
             currentRound = self.runNextRound()
 
-
-
     def runRemainder(self):
+        """
+            Resumes the run from the current round pointer, without resetting any previous state.
+        """
         Logger.logToFileOnly("runRemainder called")
-        Logger.log("Resuming run of Clue from round " + str(self.__roundPointer + 1) + "...\n")
-        currentRound = self.__roundPointer
+        Logger.log("Resuming run of Clue from round " + str(self._roundPointer + 1) + "...\n")
+        currentRound = self._roundPointer
         while (currentRound < len(self.rounds)):
             currentRound = self.runNextRound()
 

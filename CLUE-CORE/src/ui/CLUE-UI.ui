@@ -66,6 +66,7 @@
         <child>
           <object class="ttk.Labelframe" id="rounds_frame" named="True">
             <property name="height">200</property>
+            <property name="relief">raised</property>
             <property name="text" translatable="yes">Rounds
 </property>
             <property name="width">200</property>
@@ -153,6 +154,7 @@ Move Down
         <child>
           <object class="ttk.Labelframe" id="plots_frame" named="True">
             <property name="height">200</property>
+            <property name="relief">raised</property>
             <property name="text" translatable="yes">Plots
 </property>
             <property name="width">200</property>
@@ -415,6 +417,7 @@ Move Down
         <child>
           <object class="ttk.Labelframe" id="output_frame" named="True">
             <property name="height">200</property>
+            <property name="relief">raised</property>
             <property name="text" translatable="yes">Output
 </property>
             <property name="width">200</property>

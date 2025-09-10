@@ -12,19 +12,19 @@ class ClueCancellation:
     """
         Static class for handling cancellation requests in CLUE.
     """
-    _cancellation_event = threading.Event()
+    _cancellationEvent = threading.Event()
     
     @staticmethod
-    def request_cancellation():
-        ClueCancellation._cancellation_event.set()
+    def requestCancellation():
+        ClueCancellation._cancellationEvent.set()
 
     @staticmethod
-    def is_cancellation_requested():
-        return ClueCancellation._cancellation_event.is_set()
+    def isCancellationRequested():
+        return ClueCancellation._cancellationEvent.is_set()
 
     @staticmethod
-    def clear_cancellation():
-        ClueCancellation._cancellation_event.clear()
+    def clearCancellation():
+        ClueCancellation._cancellationEvent.clear()
 
 class ClueLogger:
     """
@@ -33,30 +33,30 @@ class ClueLogger:
     """
     logFile = None
     logToFile = False
-    message_queue = None
-    queue_enabled = False
+    messageQueue = None
+    queueEnabled = False
 
     @staticmethod
     def enableQueue():
-        ClueLogger.queue_enabled = True
-        ClueLogger.message_queue = queue.Queue()
+        ClueLogger.queueEnabled = True
+        ClueLogger.messageQueue = queue.Queue()
 
     @staticmethod
     def disableQueue():
-        ClueLogger.queue_enabled = False
-        ClueLogger.message_queue = None
+        ClueLogger.queueEnabled = False
+        ClueLogger.messageQueue = None
 
     @staticmethod
     def clearQueue():
-        if (ClueLogger.message_queue):
-            ClueLogger.message_queue.queue.clear()
+        if (ClueLogger.messageQueue):
+            ClueLogger.messageQueue.queue.clear()
 
     @staticmethod
     def getQueuedMessages():
         messages = []
-        if (ClueLogger.message_queue):
-            while not ClueLogger.message_queue.empty():
-                messages.append(ClueLogger.message_queue.get())
+        if (ClueLogger.messageQueue):
+            while not ClueLogger.messageQueue.empty():
+                messages.append(ClueLogger.messageQueue.get())
         return messages
 
     @staticmethod
@@ -77,19 +77,31 @@ class ClueLogger:
                 ClueLogger.logFile.close()
             ClueLogger.logFile = None
 
+    @staticmethod
+    def closeLogFile():
+        if (ClueLogger.logFile):
+            ClueLogger.logFile.close()
+            ClueLogger.logFile = None
+
+    @staticmethod
     def log(*args, **kwargs):
-        if (ClueLogger.queue_enabled and ClueLogger.message_queue):
-            ClueLogger.message_queue.put(' '.join(map(str, args)))
+        """
+            Logs a message to the console and to the log file if specified.
+        """
+        if (ClueLogger.queueEnabled and ClueLogger.messageQueue):
+            ClueLogger.messageQueue.put(' '.join(map(str, args)))
 
         print(*args, **kwargs)
-        if (ClueLogger.logFile and ClueLogger.logToFile):
-            try:
-                ClueLogger.logToFileOnly(*args, **kwargs)
-                ClueLogger.logFile.flush()
-            except Exception as e:
-                print("Error writing to log file: " + str(e))
+        try:
+            ClueLogger.logToFileOnly(*args, **kwargs)
+        except Exception as e:
+            print("Error writing to log file: " + str(e))
 
+    @staticmethod
     def logToFileOnly(*args, **kwargs):
+        """
+            Logs a message only to the log file if specified.
+        """
         if (ClueLogger.logFile and ClueLogger.logToFile):
             try:
                 #Print the current time with the log message
@@ -100,25 +112,24 @@ class ClueLogger:
             except Exception as e:
                 print("Error writing to log file: " + str(e))
 
-    @staticmethod
-    def closeLogFile():
-        if (ClueLogger.logFile):
-            ClueLogger.logFile.close()
-            ClueLogger.logFile = None
-
-
 #Base class for exceptions in CLUE
 class ClueException(Exception):
     pass
 
 class ClueCancelledException(ClueException):
-    """Exception raised when a CLUE operation is cancelled by user request"""
+    """
+        Exception raised when a CLUE operation is cancelled by user request
+    """
+
     def __init__(self, message="Operation cancelled by user"):
         self.message = message
         super().__init__(self.message)
 
-#Utility class for extracting features from the raw data
 class FeatureExtractor:
+    """
+        Static class for extracting features from raw input data.
+    """
+
     def __init__(self):
         pass
 
@@ -126,8 +137,10 @@ class FeatureExtractor:
 #For additions of features, define a method for calculating the feature from one
 #line of raw data then add the method with a name in __featuresDict below.
 
-    #Hour with the highest value
-    def __peakHour(line):
+    def _peakHour(line):
+        """
+            Hour with the highest value
+        """
         peak = 0
         peakVal = 0
         for i in range(1, len(line)):
@@ -136,16 +149,20 @@ class FeatureExtractor:
                 peakVal = line.iloc[i]
         return peak
     
-    #Highest value found
-    def __peakHourVal(line):
+    def _peakHourVal(line):
+        """
+            Highest value found
+        """
         peakVal = 0
         for i in range(1, len(line)):
             if (line.iloc[i] > peakVal):
                 peakVal = line.iloc[i]
         return peakVal
 
-    #Hour with the lowest value
-    def __baseHour(line):
+    def _baseHour(line):
+        """
+            Hour with the lowest value
+        """
         base = 0
         baseVal = float(sys.maxsize)
         for i in range(1, len(line)):
@@ -154,8 +171,10 @@ class FeatureExtractor:
                 baseVal = line.iloc[i]
         return base
 
-    #Lowest value found
-    def __baseHourVal(line):
+    def _baseHourVal(line):
+        """
+            Lowest value found
+        """
         baseVal = float(sys.maxsize)
         for i in range(1, len(line)):
             if (line.iloc[i] < baseVal):
@@ -164,50 +183,65 @@ class FeatureExtractor:
 
 #Add name of feature and method name in __featuresDict.
     __featuresDict = {
-            "Peak Hour" : __peakHour,
-            "Peak Value" : __peakHourVal,
-            "Base Hour" : __baseHour,
-            "Base Value" : __baseHourVal
+            "Peak Hour" : _peakHour,
+            "Peak Value" : _peakHourVal,
+            "Base Hour" : _baseHour,
+            "Base Value" : _baseHourVal
         } 
 
 #-----------------------------------------------------------
 
-    #Extract features from and individual line, including "ID" feature
     @staticmethod
-    def __extract(line):
+    def _extract(line):
+        """
+            Extract features from an individual line, including "ID" feature
+        """
         newLine = [line.iloc[0]] #TODO Fix bug where pandas converts to float for ID
         for v in FeatureExtractor.__featuresDict.values():
             newLine.append(v(line))
         return newLine
 
-    #Returns a list of the features available, including "ID" feature
     @staticmethod
     def headers():
+        """
+            Returns a list of the features available, including "ID" feature
+        """
         ClueLogger.logToFileOnly("__headers called")
         headers = ["ID"]
         for k in FeatureExtractor.__featuresDict.keys():
             headers.append(k) 
         return headers
 
-    #Extract features from a dataframe, returns a new dataframe with headers included
     @staticmethod
     def extractFromDataFrame(dataframe):
+        """
+            Extract features from a dataframe of raw data
+        """
         ClueLogger.logToFileOnly("extractFromDataFrame called")
-        outMatrix = np.matrix(FeatureExtractor.__extract(dataframe.iloc[0]))
+        outMatrix = np.matrix(FeatureExtractor._extract(dataframe.iloc[0]))
         for i in range(1, len(dataframe)):
-            outMatrix = np.vstack((outMatrix, FeatureExtractor.__extract(dataframe.iloc[i])))
+            outMatrix = np.vstack((outMatrix, FeatureExtractor._extract(dataframe.iloc[i])))
         headers = FeatureExtractor.headers()
-        ClueLogger.logToFileOnly("HEADERS DONE IN EXTRACTFROMDATAFRAME")
         return pd.DataFrame(data=outMatrix, columns=headers)
 
-#Static class for filtering the input based on feature selection, cluster selection, clusters found from previous round
-#and metadata from previous round
 class InputFilter:
+    """
+        Static class for filtering input data based on feature and cluster selections. Also filters based on clusters found and metadata from previous round.
+    """
 
-    #Returns an array of IDs to be part of the next round by parsing the cluster and metadata file in based on
-    #the selections in the cluster selection file.
     @staticmethod
     def filterSelection(commands, metadataDF):
+        """
+            Filters the metadata dataframe based on the commands provided.
+            Commands are in the form of a list of lists, where each inner list is a command split by ":".
+            Supported commands:
+                OVER:<size> - Keep clusters with size over <size>
+                UNDER:<size> - Keep clusters with size under <size>
+                IN:<id1,id2,...> - Keep only clusters with IDs in the list
+                NOTIN:<id1,id2,...> - Remove clusters with IDs in the list
+            Example: [["OVER", "10"], ["NOTIN", "1,2,3"]]
+            Returns a filtered dataframe containing only the clusters that match the selection criteria.
+        """
         ClueLogger.logToFileOnly("filterSelection called")
         filteredDF = metadataDF
         for command in commands:
@@ -224,11 +258,18 @@ class InputFilter:
             raise ClueException("No clusters remain after filtering out unwanted clusters")
         return filteredDF
 
-    #Filters out the non-selected features from the features file and removes IDs not part of the parsed cluster
-    #selection.
     @staticmethod
     def filter(inputDF, clustersFD, metadataFD, featuresFD, selectionFD):
+        """
+            Filters the input dataframe based on the features file and the clusters and metadata files.
+            If no features file is provided or if it is empty, all features are kept.
+            If no clusters or metadata file is provided, all clusters are kept. 
+            If only one of the files is provided, a warning is logged and no filtering is done.
+            If a selection file is provided, it is used to filter the clusters further.
+            Returns a filtered dataframe containing only the selected features and clusters.
+        """
         ClueLogger.logToFileOnly("filter called")
+
         #If no feature file or if feature file is empty, accept all features
         noFeatures = False
         if featuresFD:
@@ -260,7 +301,8 @@ class InputFilter:
             clustersDF = pd.read_csv(clustersFD, header=None)
             metadataDF = pd.read_csv(metadataFD)
             if (clustersDF.empty or metadataDF.empty):
-                #TODO Fix so that noise can be used as an explicit cluster if desired
+                #TODO Fix so that noise can be used as an explicit cluster if desired, also if no clusters found, return special exception to allow
+                #run to reset to previous round?
                 ClueLogger.log("Either cluster or metadata file is empty, meaning no clusters were found in the previous round, stopping run...")
                 raise ClueException("Clusters or metadata file is empty, cannot filter input")
             if (selectionFD):
@@ -282,15 +324,26 @@ class InputFilter:
 
         return nextInput
 
-#Constructing graphs from files and rounds
 class ClueGraphing:
+    """
+        Static class for generating graphs from CLUE rounds.
+    """
 
     graphs = {}
 
 #---------------------------- Graphing Methods ----------------------------
+#Additional graphs can be added here, each graph function takes the following parameters:
+#   clueRound - The ClueRound object for the round to generate the graph for
+#   baseInputFD - The file path to the base input data file
+#   baseFeaturesFD - The file path to the base features data file
+#   ax - The matplotlib axis to plot the graph on
+#Each graph function should plot the graph on the provided axis and not return anything.
+#The graph functions should also log to the ClueLogger as needed.
 
-    #Plot bands of the mean data for each cluster
-    def __rawBands(clueRound, baseInputFD, baseFeaturesFD, ax):
+    def _rawBands(clueRound, baseInputFD, baseFeaturesFD, ax):
+        """
+            Plots the raw bands of the mean data for each cluster.
+        """
         ClueLogger.logToFileOnly("__rawBands called")
         metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
         averagesColumns = [col for col in metadataDF.columns if col.startswith('OrigMean')]
@@ -316,8 +369,10 @@ class ClueGraphing:
 
         ax.legend(legendLabels)
 
-    #Plot feature profiles of the raw feature data for each cluster 
-    def __featureProfiles(clueRound, baseInputFD, baseFeaturesFD, ax): #TODO Use feature selection to limit plotted features
+    def _featureProfiles(clueRound, baseInputFD, baseFeaturesFD, ax): #TODO Use feature selection to limit plotted features
+        """
+            Plots the feature profiles of the mean features for each cluster.
+        """
         ClueLogger.logToFileOnly("__featureProfiles called")
         baseFeaturesDF = pd.read_csv(baseFeaturesFD)
         clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile)
@@ -382,9 +437,9 @@ class ClueGraphing:
 
 
     #Add new plots here
-    __graphDict = {
-        "Mean Raw Data" : __rawBands,
-        "Feature Profiles" : __featureProfiles
+    _graphDict = {
+        "Mean Raw Data" : _rawBands,
+        "Feature Profiles" : _featureProfiles
         }
 
 #-------------------------------------------------------------------------------
@@ -392,9 +447,13 @@ class ClueGraphing:
     def __init__(self):
         pass
 
-    #Generates all plots specified in __graphDict
     @staticmethod
     def generateGraphs(clueRound, baseInputFD, baseFeaturesFD, outputDirectory=None, directOutput=False):
+        """
+            Generates all graphs for a given CLUE round based on a specific round, uses the files from that round and the base input and features files.
+            If an output directory is specified, saves the graphs to that directory as PNG files.
+            If directOutput is set to True, displays the graphs directly using matplotlib's interactive mode.
+        """
         ClueLogger.logToFileOnly("generateGraphs called")
         if (len(pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile, header=0)) == 0):
             raise ClueException("Metadata file is empty")
@@ -402,11 +461,11 @@ class ClueGraphing:
             raise ClueException("In order to generate graphs, please select an outputDirectory or set directOutput to True")
         if (directOutput):
             plt.ioff()
-        for graphIndex, graphFunction in enumerate(ClueGraphing.__graphDict.values()):
+        for graphIndex, graphFunction in enumerate(ClueGraphing._graphDict.values()):
             fig, ax = plt.subplots(constrained_layout=True)
             graphFunction(clueRound, baseInputFD, baseFeaturesFD, ax)
-            ClueGraphing.graphs[list(ClueGraphing.__graphDict.keys())[graphIndex]] = fig
+            ClueGraphing.graphs[list(ClueGraphing._graphDict.keys())[graphIndex]] = fig
             if (outputDirectory):
-                plt.savefig(outputDirectory + "/" + list(ClueGraphing.__graphDict.keys())[graphIndex] + ".png")
+                plt.savefig(outputDirectory + "/" + list(ClueGraphing._graphDict.keys())[graphIndex] + ".png")
             else:
-                ClueLogger.log("No output directory specified, skipping saving of graph " + list(ClueGraphing.__graphDict.keys())[graphIndex])
+                ClueLogger.log("No output directory specified, skipping saving of graph " + list(ClueGraphing._graphDict.keys())[graphIndex])
