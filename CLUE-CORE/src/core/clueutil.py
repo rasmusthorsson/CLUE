@@ -125,6 +125,15 @@ class ClueCancelledException(ClueException):
         self.message = message
         super().__init__(self.message)
 
+class ClueOnlyNoiseException(ClueException):
+    """
+        Exception raised when all data points are classified as noise
+    """
+
+    def __init__(self, message="All data points classified as noise"):
+        self.message = message
+        super().__init__(self.message)
+
 class FeatureExtractor:
     """
         Static class for extracting features from raw input data.
@@ -251,8 +260,13 @@ class InputFilter:
                 filteredDF = filteredDF.loc[filteredDF["Size"] < int(command[1])]
             if (command[0] == "IN"): #Direct cluster inclusion
                 filteredDF = filteredDF.loc[filteredDF["ClusterId"].isin(map(int, command[1].split(",")))]
+                inclusionUsed = True
             if (command[0] == "NOTIN"): #Direct cluster exclusion
                 filteredDF = filteredDF.drop(map(int, command[1].split(',')), errors='ignore')
+
+        # Noise has to be explicitly included, if no inclusion command was used remove noise.
+        if not inclusionUsed:
+            filteredDF = filteredDF.loc[filteredDF["ClusterId"] != -1]
 
         if (len(filteredDF) < 1):
             raise ClueException("No clusters remain after filtering out unwanted clusters")
@@ -316,7 +330,9 @@ class InputFilter:
                 filteredClustersDF = clustersDF.loc[clustersDF.iloc[:, 1].isin(map(int, filteredSelectionDF["ClusterId"]))]
                 nextInput = nextInput.loc[nextInput.iloc[:, 0].isin(filteredClustersDF.iloc[:, 0].array)]
             else:
-                nextInput = nextInput.loc[nextInput.iloc[:, 0].isin(clustersDF.iloc[:, 0].array)]
+                # Remove noise if no selection file is provided as noise has to be explicitly included
+                noNoiseClustersDF = clustersDF.loc[clustersDF.iloc[:, 1] != -1]
+                nextInput = nextInput.loc[nextInput.iloc[:, 0].isin(noNoiseClustersDF.iloc[:, 0].array)]
         elif (clustersFD and not metadataFD): #MetadataFD does not exist
             ClueLogger.log("Warning: Metadata file does not exist but clusters file does, skipping filtering...")
         elif (metadataFD and not clustersFD): #ClustersDF does not exist
@@ -399,7 +415,6 @@ class ClueGraphing:
         random.seed(42) #Use of random to vary the colors in the heatmap slightly for increased visibility
 
         headers = FeatureExtractor.headers()
-        ClueLogger.logToFileOnly("HEADERS DONE")
         xAxis = headers[1:len(headers)]
         yAxis = list(clusterFeaturesDict.keys())
 

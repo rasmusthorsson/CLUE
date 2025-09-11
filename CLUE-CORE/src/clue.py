@@ -46,10 +46,12 @@ class ClueGui(ClueGuiUI):
         errorPopup.update_idletasks()
         width = errorPopup.winfo_reqwidth()
         height = errorPopup.winfo_reqheight()
-        errorPopup.geometry(f"{width}x{height}")
+        minWidth = max(300, width)
+        minHeight = max(100, height)
+        errorPopup.geometry(f"{minWidth}x{minHeight}")
         Logger.log(f"Error Popup: {title} - {message}")
 
-
+    # TODO Replace this with direct file selection as some will ask for save, some for open
     def _chooseFile(self, entryWidget, popupWindow, type=("CSV files", "*.csv")):
         """
             Open a file dialog to choose a file and set the entry widget's value to the selected file path.
@@ -425,9 +427,9 @@ class ClueGui(ClueGuiUI):
             roundName = roundNameVar.get()
             if roundName in self.roundsDict:
                 self.clueRun.removeRound(roundName)     # Remove the run logically
-                self.updateActiveRoundButton()          # Update the all round buttons to reflect the change
                 self.roundsDict[roundName].destroy()    # Remove the button from the UI
                 del self.roundsDict[roundName]          # Remove the button from the dictionary
+                self.updateActiveRoundButton()          # Update the all round buttons to reflect the change
                 Logger.log("Round Deleted", f"Round '{roundName}' has been deleted.")
             else:
                 self._errorPopup("Round Not Found", f"Round '{roundName}' does not exist.")
@@ -856,14 +858,14 @@ class ClueGui(ClueGuiUI):
                 ClueCancellation.clearCancellation()
             self.updateActiveRoundButton()
         except clueutil.ClueCancelledException as e:
-            errorMsg = str(e)
-            self.mainwindow.after(0, self.onRunCancelled, self.buttonRunNext, errorMsg)
+            errorMsg = f"{type(e).__name__}: {str(e)}"
+            self.mainwindow.after(0, lambda: self.onRunCancelled(self.buttonRunNext, errorMsg))
         except clueutil.ClueException as e:
-            errorMsg = str(e)
-            self.mainwindow.after(0, self.onRunError, self.buttonRunNext, errorMsg)
+            errorMsg = f"{type(e).__name__}: {str(e)}"
+            self.mainwindow.after(0, lambda: self.onRunError(self.buttonRunNext, errorMsg))
         except Exception as e:
-            errorMsg = str(e)
-            self.mainwindow.after(0, self.onRunError, self.buttonRunNext, errorMsg)
+            errorMsg = f"{type(e).__name__}: {str(e)}"
+            self.mainwindow.after(0, lambda: self.onRunError(self.buttonRunNext, errorMsg))
 
     def runRest(self):
         """
@@ -887,14 +889,14 @@ class ClueGui(ClueGuiUI):
                 ClueCancellation.clearCancellation()
             self.updateActiveRoundButton()
         except clueutil.ClueCancelledException as e:
-            errorMsg = str(e)
-            self.mainwindow.after(0, self.onRunCancelled, self.buttonRunRest, errorMsg)
+            errorMsg = f"{type(e).__name__}: {str(e)}"
+            self.mainwindow.after(0, lambda: self.onRunCancelled(self.buttonRunRest, errorMsg))
         except clueutil.ClueException as e:
-            errorMsg = str(e)
-            self.mainwindow.after(0, self.onRunError, self.buttonRunRest, errorMsg)
+            errorMsg = f"{type(e).__name__}: {str(e)}"
+            self.mainwindow.after(0, lambda: self.onRunError(self.buttonRunRest, errorMsg))
         except Exception as e:
-            errorMsg = str(e)
-            self.mainwindow.after(0, self.onRunError, self.buttonRunRest, errorMsg)
+            errorMsg = f"{type(e).__name__}: {str(e)}"
+            self.mainwindow.after(0, lambda: self.onRunError(self.buttonRunRest, errorMsg))
 
     def runClueFromBeginning(self):
         """
@@ -918,14 +920,14 @@ class ClueGui(ClueGuiUI):
                 ClueCancellation.clearCancellation()
             self.updateActiveRoundButton()
         except clueutil.ClueCancelledException as e:
-            errorMsg = str(e)
-            self.mainwindow.after(0, self.onRunCancelled, self.buttonRunClue, errorMsg)
+            errorMsg = f"{type(e).__name__}: {str(e)}"
+            self.mainwindow.after(0, lambda: self.onRunCancelled(self.buttonRunClue, errorMsg))
         except clueutil.ClueException as e:
-            errorMsg = str(e)
-            self.mainwindow.after(0, self.onRunError, self.buttonRunClue, errorMsg)
+            errorMsg = f"{type(e).__name__}: {str(e)}"
+            self.mainwindow.after(0, lambda: self.onRunError(self.buttonRunClue, errorMsg))
         except Exception as e:
-            errorMsg = str(e)
-            self.mainwindow.after(0, self.onRunError, self.buttonRunClue, errorMsg)
+            errorMsg = f"{type(e).__name__}: {str(e)}"
+            self.mainwindow.after(0, lambda: self.onRunError(self.buttonRunClue, errorMsg))
 
     def runNextRoundButton(self):
         """

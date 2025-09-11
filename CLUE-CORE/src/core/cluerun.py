@@ -1,9 +1,11 @@
 from enum import IntEnum
 
 import os
+import queue
 import subprocess
 from pathlib import Path
 import shutil
+import threading
 import time
 from typing import Dict, List, Optional
 
@@ -287,7 +289,24 @@ class ClueRound:
                     text=True,
                     bufsize=1)
         
-        # The subprocess is non-blocking, so we poll it for output and check for cancellation. 
+        outputQueue = queue.Queue() # Instead of direct queueing to for threadsafe logging, only main thread is used for logging now
+
+        def readOutput():
+            """Read subprocess output in separate thread."""
+            try:
+                for line in iter(proc.stdout.readline, ''):
+                    if line:
+                        outputQueue.put(line.rstrip())
+                proc.stdout.close()
+            except Exception:
+                pass
+            finally:
+                outputQueue.put(None)  # End of output
+
+        readerThread = threading.Thread(target=readOutput, daemon=True)
+        readerThread.start()
+
+        # The subprocess is non-blocking, so we poll it for output and check for cancellation.
         # This also ensures that the output is logged in real-time.
         try:
             while proc.poll() is None:
@@ -295,22 +314,26 @@ class ClueRound:
                     Logger.log("Cancelling parameter optimization...")
                     proc.terminate()
                     try:
-                        proc.wait(timeout=5)
+                        proc.wait(timeout=2)
                     except subprocess.TimeoutExpired:
                         proc.kill()
                         proc.wait()
-                    raise clueutil.ClueCancelledException("Run Cancelled: The CLUE round was cancelled during parameter optimization.")
-
-                output = proc.stdout.readline()
-                if output:
+                    raise clueutil.ClueCancelledException("Round cancelled. Round was cancelled during parameter optimization.")
+                try:
+                    output = outputQueue.get(timeout=0.1)
+                    if output is None:
+                        break
+                    Logger.log(output)
+                except queue.Empty:
+                    continue
+            try:
+                while True:
+                    output = outputQueue.get_nowait()
+                    if output is None:
+                        break
                     Logger.log(output.rstrip())
-                else:
-                    time.sleep(0.1)
-
-            remainingOutput = proc.stdout.read()
-            if remainingOutput:
-                for line in remainingOutput.splitlines():
-                    Logger.log(line.rstrip())
+            except queue.Empty:
+                pass
 
         # Ensure the process is terminated if it is still running
         finally:
@@ -321,6 +344,7 @@ class ClueRound:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
+            readerThread.join(timeout=2)
 
         #Read the optimal parameters from the output file and update the clueConfig
         Logger.log("Reading best parameter optimization values...")
@@ -370,29 +394,52 @@ class ClueRound:
                     stderr=subprocess.STDOUT, 
                     text=True,
                     bufsize=1)
+        
+        outputQueue = queue.Queue() # Instead of direct queueing to for threadsafe logging, only main thread is used for logging now
+
+        def readOutput():
+            """Read subprocess output in separate thread."""
+            try:
+                for line in iter(proc.stdout.readline, ''):
+                    if line:
+                        outputQueue.put(line.rstrip())
+                proc.stdout.close()
+            except Exception:
+                pass
+            finally:
+                outputQueue.put(None)  # End of output
+
+        readerThread = threading.Thread(target=readOutput, daemon=True)
+        readerThread.start()
 
         # The subprocess is non-blocking, so we poll it for output and check for cancellation.
         # This also ensures that the output is logged in real-time.
         try:
             while proc.poll() is None:
                 if ClueCancellation.isCancellationRequested():
+                    Logger.log("Cancelling clustering run...")
                     proc.terminate()
                     try:
-                        proc.wait(timeout=5)
+                        proc.wait(timeout=2)
                     except subprocess.TimeoutExpired:
                         proc.kill()
                         proc.wait()
                     raise clueutil.ClueCancelledException("Run Cancelled: The CLUE round was cancelled.")
-
-                output = proc.stdout.readline()
-                if output:
+                try:
+                    output = outputQueue.get(timeout=0.1)
+                    if output is None:
+                        break
+                    Logger.log(output)
+                except queue.Empty:
+                    continue
+            try:
+                while True:
+                    output = outputQueue.get_nowait()
+                    if output is None:
+                        break
                     Logger.log(output.rstrip())
-                else:
-                    time.sleep(0.1)
-            remainingOutput = proc.stdout.read()
-            if remainingOutput:
-                for line in remainingOutput.splitlines():
-                    Logger.log(line.rstrip())
+            except queue.Empty:
+                pass
 
         # Ensure the process is terminated if it is still running
         finally:
@@ -403,6 +450,7 @@ class ClueRound:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
+            readerThread.join(timeout=2)
 
         Logger.log("Round " + self.roundName + " completed successfully.\n")
 
@@ -573,6 +621,15 @@ class ClueRun:
             if (self.rounds[i].roundName == roundName):
                 return i
         raise clueutil.ClueException("Round with name " + roundName + " not found, cannot get index.")
+    
+    def getRoundByIndex(self, index):
+        """
+            Returns a round by its index in the list of rounds to be ran.
+        """
+        Logger.logToFileOnly("getRoundByIndex called")
+        if (index < 0 or index >= len(self.rounds)):
+            raise clueutil.ClueException("Index " + str(index) + " is out of bounds, cannot get round.")
+        return self.rounds[index]
 
     def getRound(self, roundName):
         """
@@ -654,6 +711,13 @@ class ClueRun:
         Logger.logToFileOnly("onStoppedRun called")
         #Unused for now, placeholder for future functionality
 
+    def _onClueNoiseException(self):
+        """
+            Reverts the run to the previous round if a ClueOnlyNoiseException is encountered.
+        """
+        Logger.logToFileOnly("_onClueNoiseException called")
+        self._roundPointer -= 1
+
     def runNextRound(self):
         """
             Runs the next round in the list of rounds to be ran. If all rounds have been run, writes final output files and resets the run.
@@ -718,6 +782,13 @@ class ClueRun:
                 self._roundPointer += 1
             else:
                 raise clueutil.ClueException("All rounds have already been run, cannot run next round.")
+            metadataDF = pd.read_csv(self.rounds[self._roundPointer - 1].roundDirectory + "/" + self.rounds[self._roundPointer - 1]._metadataFile)
+            if (len(metadataDF) == 0):
+                self._onClueNoiseException()
+                raise clueutil.ClueOnlyNoiseException("No data points were clustered in round " + str(self.getRoundByIndex(self._roundPointer).roundName) + ", staying at this round.")
+            elif (len(metadataDF[metadataDF['ClusterId'] != -1]) == 0):
+                self._onClueNoiseException()
+                raise clueutil.ClueOnlyNoiseException("No data points were clustered (all noise) in round " + str(self.getRoundByIndex(self._roundPointer).roundName) + ", staying at this round.")
         except clueutil.ClueCancelledException as e:
             self._onStoppedRun()
             raise e
@@ -746,7 +817,11 @@ class ClueRun:
         self.resetRun()
         currentRound = 0
         while (currentRound < len(self.rounds)):
-            currentRound = self.runNextRound()
+            try:
+                currentRound = self.runNextRound()
+            except clueutil.ClueOnlyNoiseException as e:
+                Logger.log("ClueOnlyNoiseException caught: " + str(e))
+                raise clueutil.ClueException("Run stopped due to ClueOnlyNoiseException: " + str(e))
 
     def runRemainder(self):
         """
@@ -756,6 +831,8 @@ class ClueRun:
         Logger.log("Resuming run of Clue from round " + str(self._roundPointer + 1) + "...\n")
         currentRound = self._roundPointer
         while (currentRound < len(self.rounds)):
-            currentRound = self.runNextRound()
-
-
+            try:
+                currentRound = self.runNextRound()
+            except clueutil.ClueOnlyNoiseException as e:
+                Logger.log("ClueOnlyNoiseException caught: " + str(e))
+                raise clueutil.ClueException("Run stopped due to ClueOnlyNoiseException: " + str(e))

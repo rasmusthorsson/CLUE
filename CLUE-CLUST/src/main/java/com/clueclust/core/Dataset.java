@@ -383,7 +383,8 @@ public class Dataset {
         for (int i = 0; i < points.size(); i++) {
             Point p = points.get(i);
             int label = p.getLabel();
-            if (label != Point.NOISE) { // Skip noise points
+            if (true) { //Do not skip noise points as we want the option to consider them as a cluster later on
+            //if (label != Point.NOISE) { // Skip noise points
                 // Add to points by cluster
                 pointsByCluster.computeIfAbsent(label, k -> new ArrayList<>()).add(p);
 
