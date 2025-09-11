@@ -80,7 +80,20 @@ class ClueGui(ClueGuiUI):
                    currentRoundName="",
                    ):
         """
-            Build a popup window to configure a round.
+            Build a popup window to configure a round. This sets up settings for the following:
+            --- Round Settings ---
+            - Round Name (string)
+            - Features File (string)
+            - Selection File (string)
+            --- ClueConfig Settings ---
+            - Algorithm (DBSCAN, IP.LSH.DBSCAN, KMeans)
+            - Distance Metric (Euclidean, Angular, DTW)
+            - Parameter Optimization Level (None, K-Distance, Grid Search)
+            - Epsilon (float)
+            - MinPts (int)
+            - Hyperplanes (int)
+            - Hashtables (int)
+            - KClusters (int)
         """
 
         #Popup window creation   
@@ -92,6 +105,8 @@ class ClueGui(ClueGuiUI):
         popup.columnconfigure(0, weight=1)
         popup.columnconfigure(1, weight=1)
         popup.rowconfigure(0, weight=1)
+
+        #-------------- Config Settings --------------
 
         #Config frame
         roundConfig = tk.LabelFrame(popup, text="Round Configs", padx=10, pady=10)
@@ -127,7 +142,7 @@ class ClueGui(ClueGuiUI):
         paramOptLevel.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
         paramOptLevel.current(currentParamOpt)
 
-        # Epsilon, MinPts, Hyperplanes, Hashtables, KClusters, Threads, Standardize, Use Features selection for the config
+        # Epsilon, MinPts, Hyperplanes, Hashtables, KClusters, Threads, Standardize, UseFeatures selection
         tk.Label(roundConfig, text="Epsilon").grid(row=3, column=0, padx=5, pady=5, sticky="e")
         epsilonVar = tk.DoubleVar(value=currentEpsilon)
         tk.Entry(roundConfig, textvariable=epsilonVar).grid(row=3, column=1, padx=5, pady=5)
@@ -160,6 +175,8 @@ class ClueGui(ClueGuiUI):
         useFeaturesVar = tk.BooleanVar(value=currentUseFeatures)
         tk.Checkbutton(roundConfig, variable=useFeaturesVar).grid(row=10, column=1, padx=5, pady=5, sticky="w")
         
+        #-------------- Round Settings --------------
+
         # Round settings frame
         roundSettings = tk.LabelFrame(popup, text="Round Settings", padx=10, pady=10)
         roundSettings.grid(row=0, column=1, padx=10, pady=5, stick="nsew")
@@ -173,7 +190,7 @@ class ClueGui(ClueGuiUI):
         tk.Label(roundSettings, text="Features File:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
         featuresFileEntry = tk.Entry(roundSettings)
         featuresFileEntry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        featuresFileEntry.insert(0, currentFeaturesFile)  # <-- Set initial value
+        featuresFileEntry.insert(0, currentFeaturesFile) 
         featuresFileButton = tk.Button(
             roundSettings,
             text="Browse",
@@ -185,7 +202,7 @@ class ClueGui(ClueGuiUI):
         tk.Label(roundSettings, text="Selection File:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
         selectionFileEntry = tk.Entry(roundSettings)
         selectionFileEntry.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-        selectionFileEntry.insert(0, currentSelectionFile)  # <-- Set initial value
+        selectionFileEntry.insert(0, currentSelectionFile)
         selectionFileButton = tk.Button(
             roundSettings,
             text="Browse",
@@ -193,8 +210,11 @@ class ClueGui(ClueGuiUI):
         )
         selectionFileButton.grid(row=2, column=2, padx=5, pady=5, sticky="ew")
 
-        # Callback when user clicks "OK"
+        # Callback when user clicks "OK", reads values from the UI and creates/updates the round
         def onOk():
+            """
+                Callback when user clicks "OK", reads values from the UI and creates/updates the round.
+            """
 
             # Grab values from the UI elements
             name = roundnameVar.get() or f"Round {self.roundCount + 1}"
@@ -212,9 +232,10 @@ class ClueGui(ClueGuiUI):
             standardize = standardizeVar.get() or currentStandardize
             useFeatures = useFeaturesVar.get() or currentUseFeatures
 
+            # If the round does not have a button associated with it, it must be created
             if currentRoundName not in self.roundsDict.keys():
-                #If round by name does not exist already, create it
                 if self.clueRun.getRound(roundnameVar.get()) is None:
+                    # If the round does not already exist, create it
                     self.clueRun.buildRound(
                         name,
                         featureFile,
@@ -237,7 +258,10 @@ class ClueGui(ClueGuiUI):
                     
                     # Define the callback function for the round button click
                     def roundClick():
-                        #Grab values from dictionary and Logger.log them
+                        """
+                            Callback when the round button is clicked, calls the original function to open the round popup with current settings.
+                            Results in different behaviour from the initial creation of the round since the round already exists.
+                        """
                         clueRound = self.clueRun.getRound(name)
                         clueConfig = clueRound.clueConfig
 
@@ -259,7 +283,7 @@ class ClueGui(ClueGuiUI):
                             currentRoundName=name
                         )
 
-                    # Create the new round button in roundsFrame
+                    # Create the new button in the round section of the UI
                     newRoundButton = tk.Button(
                         self.roundsFrame,
                         text=f"{name}", 
@@ -275,7 +299,7 @@ class ClueGui(ClueGuiUI):
 
             # If round already exists, update it
             else:
-                #If the name is already in the roundsDict, show an error
+                # If the name is not the same as the current round name, show an error. This is done to avoid complexity of renaming rounds.
                 if name != currentRoundName:
                     self._errorPopup("Not Implemented", f"Namechange not implemented yet. Please delete the round and create a new one with the desired name.")
                     return
@@ -305,10 +329,10 @@ class ClueGui(ClueGuiUI):
         tk.Button(popup, text="OK", command=onOk).grid(row=2, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=2, column=1, padx=5, pady=10)
 
-    """
-        Add a new round to the current run while also adding it to the UI using the builder.
-    """
     def addRound(self):
+        """
+            Add a new round to the current run while also adding it to the UI using buildRoundPopup.
+        """
         if self.clueRun is None:
             self._errorPopup("No run defined", "No run defined, Please create a run first.")
             return
@@ -317,7 +341,10 @@ class ClueGui(ClueGuiUI):
         self.buildRoundPopup()
 
     def addExistingRound(self, _round):
-        #Add a round button based on an existing round in the current run without prompting for any settings
+        """
+            Add an already existing round to the current run to the UI, this uses the existing settings of the round.
+            Does not prompt for new settings.
+        """
         if self.clueRun is None:
             self._errorPopup("No run defined", "No run defined, Please create a run first.")
             return
@@ -356,11 +383,10 @@ class ClueGui(ClueGuiUI):
         roundButton.grid(row=currentRows, column=0, sticky="ew", pady=5)
         self.roundsDict[_round] = roundButton
 
-    
-    """
-        Delete a round from the current run and remove it from the UI.
-    """
     def deleteRound(self):
+        """
+            Delete a round from the current run and remove it from the UI.
+        """
         if self.clueRun is None:
             self._errorPopup("No run defined", "No run defined, Please create a run first.")
             return
@@ -368,11 +394,12 @@ class ClueGui(ClueGuiUI):
         #Create a popup dialog to select round name deletion and then delete that round
         popup = tk.Toplevel(self.mainwindow)
         popup.title("Delete Round")
-        popup.grab_set()  # Makes it modal
+        popup.grab_set() 
         popup.focus_force()
         popup.columnconfigure(0, weight=1)
         popup.rowconfigure(0, weight=1)
 
+        # Round name selection dropdown
         roundNameLabel = tk.Label(popup, text="Select Round to Delete:")
         roundNameLabel.grid(row=0, column=0, padx=5, pady=5, sticky="e")
         roundNameVar = tk.StringVar(popup)
@@ -391,27 +418,29 @@ class ClueGui(ClueGuiUI):
         roundNameMenu.current(0)
         roundNameMenu.bind("<<ComboboxSelected>>", lambda e: roundNameVar.set(roundNameMenu.get()))
 
-        #On clicking the delete button, delete the round from the run and remove it from the UI
         def on_delete():
+            """
+                Callback when the delete button is clicked, deletes the selected round from the run and removes it from the UI.
+            """
             roundName = roundNameVar.get()
             if roundName in self.roundsDict:
-                self.clueRun.removeRound(roundName)
-                self.updateActiveRoundButton()
-                self.roundsDict[roundName].destroy()
-                del self.roundsDict[roundName]
+                self.clueRun.removeRound(roundName)     # Remove the run logically
+                self.updateActiveRoundButton()          # Update the all round buttons to reflect the change
+                self.roundsDict[roundName].destroy()    # Remove the button from the UI
+                del self.roundsDict[roundName]          # Remove the button from the dictionary
                 Logger.log("Round Deleted", f"Round '{roundName}' has been deleted.")
             else:
                 self._errorPopup("Round Not Found", f"Round '{roundName}' does not exist.")
-            popup.destroy()  # Close the popup
+            popup.destroy()
 
         tk.Button(popup, text="Delete", command=on_delete).grid(row=1, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=1, column=1, padx=5, pady=10)
 
-    """
-        Create a popup to selet a round to move up in the list of rounds to be ran.
-        Also moves the button in the UI to reflect the change.
-    """
     def moveRoundUp(self):
+        """
+            Create a popup to select a round to move up in the list of rounds to be ran.
+            Also moves the button in the UI to reflect the change.
+        """
         if self.clueRun is None:
             self._errorPopup("No run defined", "No run defined, Please create a run first.")
             return
@@ -419,6 +448,7 @@ class ClueGui(ClueGuiUI):
             self._errorPopup("No Rounds", "No rounds available to move up.")
             return
 
+        # Popup window for moving the round up
         popup = tk.Toplevel(self.mainwindow)
         popup.title("Move Round Up")
         popup.grab_set() 
@@ -426,6 +456,7 @@ class ClueGui(ClueGuiUI):
         popup.columnconfigure(0, weight=1)
         popup.rowconfigure(0, weight=1)
 
+        # Round name selection dropdown
         roundNameLabel = tk.Label(popup, text="Select Round to Move Up:")
         roundNameLabel.grid(row=0, column=0, padx=5, pady=5, sticky="e")
         roundNameVar = tk.StringVar(popup)
@@ -440,16 +471,21 @@ class ClueGui(ClueGuiUI):
         roundNameMenu.current(0)
         roundNameMenu.bind("<<ComboboxSelected>>", lambda e: roundNameVar.set(roundNameMenu.get()))
 
-        # Define the callback function for moving the round up
         def onMoveUp():
+            """
+                Callback function for moving the selected round up in the list.
+            """
             try:
+
                 roundName = roundNameVar.get()
                 currentIndex = self.clueRun.getRoundIndex(roundName)
+                if currentIndex == -1:
+                    self._errorPopup("Round Not Found", f"Round '{roundName}' does not exist.")
                 if currentIndex > 0:
                     # Swap the current round with the one above it
                     aboveRoundName = list(self.clueRun.rounds)[currentIndex - 1].roundName
-                    self.clueRun.moveRoundUp(roundName)
-                    self.updateActiveRoundButton()
+                    self.clueRun.moveRoundUp(roundName) # Logical move
+                    self.updateActiveRoundButton()      # Update button styles to reflect the reset caused by logical move
 
                     # Update the UI
                     self.roundsDict[roundName].grid(row=currentIndex - 1, column=0, sticky="ew", pady=5)
@@ -459,21 +495,24 @@ class ClueGui(ClueGuiUI):
                     self._errorPopup("Already at Top: ", f"Round '{roundName}' is already at the top.")
             except clueutil.ClueException as e:
                 self._errorPopup("Error Moving Round", str(e))
-            popup.destroy()  # Close the popup
+            popup.destroy()
 
         tk.Button(popup, text="Move Up", command=onMoveUp).grid(row=1, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=1, column=1, padx=5, pady=10)
         
-    """
-        Create a popup to select a round to move down in the list of rounds to be ran.
-        Also moves the button in the UI to reflect the change.
-    """
     def moveRoundDown(self):
+        """
+            Create a popup to select a round to move down in the list of rounds to be ran.
+            Also moves the button in the UI to reflect the change.
+        """
         if self.clueRun is None:
             self._errorPopup("No run defined", "No run defined, Please create a run first.")
             return
-        
-        #Move a round down in the list of rounds to be ran, if it is not already at the bottom.
+        if not list(self.roundsDict):
+            self._errorPopup("No Rounds", "No rounds available to move down.")
+            return
+
+        # Popup window for moving the round down
         popup = tk.Toplevel(self.mainwindow)
         popup.title("Move Round Down")
         popup.grab_set() 
@@ -481,6 +520,7 @@ class ClueGui(ClueGuiUI):
         popup.columnconfigure(0, weight=1)
         popup.rowconfigure(0, weight=1) 
 
+        # Round name selection dropdown
         roundNameLabel = tk.Label(popup, text="Select Round to Move Down:")
         roundNameLabel.grid(row=0, column=0, padx=5, pady=5, sticky="e")
         roundNameVar = tk.StringVar(popup)
@@ -499,8 +539,10 @@ class ClueGui(ClueGuiUI):
         roundNameMenu.current(0)
         roundNameMenu.bind("<<ComboboxSelected>>", lambda e: roundNameVar.set(roundNameMenu.get())) 
 
-        # Define the callback function for moving the round down
         def onMoveDown():
+            """
+                Callback function for moving the selected round down in the list.
+            """
             try:
                 roundName = roundNameVar.get()
                 currentIndex = self.clueRun.getRoundIndex(roundName)
@@ -525,32 +567,37 @@ class ClueGui(ClueGuiUI):
         tk.Button(popup, text="Move Down", command=onMoveDown).grid(row=1, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=1, column=1, padx=5, pady=10)
     
-    """
-        Clear all rounds from the current run and update the UI.
-    """
     @autoUpdateRounds
     def clearRounds(self):
+        """
+            Clear all rounds from the current run and update the UI.
+        """
         for _, button in self.roundsDict.items():
             button.destroy()
         self.roundsDict.clear()
         self.roundCount = 0
 
-    """
-        Change the label of the run in the UI.
-    """
     def changeRunNameLabel(self, newName):
+        """
+            Change the label of the run in the UI.
+        """
         if self.clueRun is not None:
             self.builder.get_object("run_name_label", self.mainwindow).config(text=newName)
         else:
             self._errorPopup("No Run Defined", "Please create a run first.")
 
-    """
-        Create a new run and clear any existing rounds. Name is specified in a popup dialog.
-    """
     @autoUpdateRounds
     def newRun(self):
+        """
+            Create a new run and clear any existing rounds. Name is specified in a popup dialog.
+        """
+        if self.runThread is not None and self.runThread.is_alive():
+            self._errorPopup("Run In Progress", "Cannot create a new run while another run is in progress.")
+            return
+        
         self.clearRounds()
         
+        # New Run name popup dialog
         popup = tk.Toplevel(self.mainwindow)
         popup.title(f"Create New Run")
         popup.grab_set()
@@ -568,6 +615,9 @@ class ClueGui(ClueGuiUI):
         tk.Entry(newRunName, textvariable=runNameVar).grid(row=0, column=1, padx=5, pady=5)
 
         def onOk():
+            """
+                Create a new ClueRun instance with the specified parameters.
+            """
             newName = runNameVar.get() or "Run1"
             inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
             directory = self.builder.get_object("directory_entry", self.mainwindow).get()
@@ -584,11 +634,70 @@ class ClueGui(ClueGuiUI):
 
         tk.Button(popup, text="OK", command=onOk).grid(row=1, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=1, column=1, padx=5, pady=10)
+    
+    def saveRun(self):
+        """
+            Save the current CLUE run to an XML file.
+        """
+        if self.clueRun is None:
+            self._errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        
+        filePath = filedialog.asksaveasfilename(
+            parent=self.mainwindow,
+            title="Save CLUE Run",
+            defaultextension=".xml",
+            filetypes=[("CLUE XML Run files", "*.xml"), ("All files", "*.*")]
+        )
+        if filePath:
+            try:
+                clueserializer.serialize_cluerun(self.clueRun, filePath)
+                Logger.log(f"Run Saved: CLUE run saved to {filePath}.")
+            except clueutil.ClueException as e:
+                self._errorPopup("Error Saving Run", str(e))
 
-    """
-        Create a tab in the notebook for displaying plots.
-    """
+    def loadRun(self):
+        """
+            Load a CLUE run from an XML file.
+        """
+        filePath = filedialog.askopenfilename(
+            parent=self.mainwindow,
+            title="Load CLUE Run",
+            filetypes=[("CLUE XML Run files", "*.xml"), ("All files", "*.*")]
+        )
+        if filePath:
+            try:
+                self.clueRun = clueserializer.deserialize_cluerun(filePath)
+                Logger.log(f"Run Loaded: CLUE run loaded from {filePath}.")
+            except clueutil.ClueException as e:
+                self._errorPopup("Error Loading Run", str(e))
+            self.buildExistingRun()
+
+    @autoUpdateRounds
+    def buildExistingRun(self):
+        """
+            Builds all the round buttons and updates all the UI elements for an already existing run.
+        """
+        if self.clueRun is None:
+            self._errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        self.clearRounds()
+        self.changeRunNameLabel(self.clueRun.runName)
+
+        # Update global setting entries
+        self.builder.get_object("input_file_entry", self.mainwindow).delete(0, tk.END)
+        self.builder.get_object("input_file_entry", self.mainwindow).insert(0, str(self.clueRun.baseFile))
+        self.builder.get_object("directory_entry", self.mainwindow).delete(0, tk.END)
+        self.builder.get_object("directory_entry", self.mainwindow).insert(0, str(self.clueRun.baseDirectory))
+        self.builder.get_object("clueclust_entry", self.mainwindow).delete(0, tk.END)
+        self.builder.get_object("clueclust_entry", self.mainwindow).insert(0, str(self.clueRun.CLUECLUST))
+        for round in self.clueRun.rounds:
+            self.addExistingRound(round.roundName)
+
     def createPlotTab(self, notebook, fig, name):
+        """
+            Create a tab in the notebook for displaying plots.
+        """
         plotTab = ttk.Frame(notebook)
         notebook.add(plotTab, text=name)
 
@@ -596,14 +705,15 @@ class ClueGui(ClueGuiUI):
         figCanvas.draw()
         figCanvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
+        # Add plot to the navigation toolbar
         toolbar = NavigationToolbar2Tk(figCanvas, plotTab)
         toolbar.update()
         toolbar.pack(side=tk.TOP, fill="both")
 
-    """
-        Build the graphs for the given round.
-    """
     def buildGraphs(self, round, baseFile, baseFeaturesFile, outputDirectory, directOutput):
+        """
+            Build the graphs for the given round and add them to the UI.
+        """
         try:
             clueutil.ClueGraphing.generateGraphs(
                 round,
@@ -618,6 +728,7 @@ class ClueGui(ClueGuiUI):
         except Exception as e:
             self._errorPopup("Unexpected Error", str(e))
             return
+        
         roundName = round.roundName if round is not None else "None"
         self.builder.get_object("round_graph_name", self.mainwindow).config(text=roundName)
 
@@ -633,29 +744,18 @@ class ClueGui(ClueGuiUI):
             else:
                 self._errorPopup("No figure found for graph: ", name)
 
-    @autoUpdateRounds
-    def buildExistingRun(self):
-        #Builds all the round buttons and updates all the UI elements to reflect the current state of the run
-        if self.clueRun is None:
-            self._errorPopup("No run defined", "No run defined, Please create a run first.")
-            return
-        self.clearRounds()
-        self.changeRunNameLabel(self.clueRun.runName)
-        self.builder.get_object("input_file_entry", self.mainwindow).delete(0, tk.END)
-        self.builder.get_object("input_file_entry", self.mainwindow).insert(0, str(self.clueRun.baseFile))
-        self.builder.get_object("directory_entry", self.mainwindow).delete(0, tk.END)
-        self.builder.get_object("directory_entry", self.mainwindow).insert(0, str(self.clueRun.baseDirectory))
-        self.builder.get_object("clueclust_entry", self.mainwindow).delete(0, tk.END)
-        self.builder.get_object("clueclust_entry", self.mainwindow).insert(0, str(self.clueRun.CLUECLUST))
-        for round in self.clueRun.rounds:
-            self.addExistingRound(round.roundName)
-
     def cleanupAfterRun(self, button, finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput):
+        """
+            Cleanup the UI after a run has completed, re-enabling buttons and building graphs.
+        """
         self.stopRunningIndicator(button)
         self.runThread = None
         self.buildGraphs(finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput)
 
     def updateActiveRoundButton(self):
+        """
+            Update the visual state of the round buttons to indicate which round is active, completed, or not yet run.
+        """
         if self.clueRun is None:
             return
         
@@ -664,51 +764,74 @@ class ClueGui(ClueGuiUI):
         for _, (roundName, button) in enumerate(self.roundsDict.items()):
             roundIndex = self.clueRun.getRoundIndex(roundName) 
             if roundIndex == roundPointer:
-                # Next round to run - highlight with multiple visual cues
+                # Next round to run
                 button.config(
-                    text=f"▶ {roundName}",           # Arrow indicator
-                    bg="lightblue",                 # Light blue background
-                    font=("TkDefaultFont", 9, "bold"), # Bold font
-                    relief="solid",                 # Solid border style
-                    borderwidth=2,                  # Thicker border
-                    fg="darkblue"                   # Dark blue text
+                    text=f"▶ {roundName}",              # Arrow indicator
+                    bg="lightblue",                     # Light blue background
+                    font=("TkDefaultFont", 9, "bold"),  # Bold font
+                    relief="solid",                     # Solid border style
+                    borderwidth=2,                      # Thicker border
+                    fg="darkblue"                       # Dark blue text
                 )
             elif roundIndex == roundPointer - 1:
-                # Just completed round - subtle highlight
+                # Just completed round
                 button.config(
-                    text=f"✓ {roundName}",          # Checkmark indicator
-                    bg="lightgreen",                     # Green background
-                    font=("TkDefaultFont", 9, "normal"), # Normal font
-                    relief="solid",                 # Normal solid style
-                    borderwidth=1,                  # Normal border
-                    fg="darkgreen"                  # Dark green text
+                    text=f"✓ {roundName}",                 # Checkmark indicator
+                    bg="lightgreen",                       # Green background
+                    font=("TkDefaultFont", 9, "normal"),   # Normal font
+                    relief="solid",                        # Normal solid style
+                    borderwidth=1,                         # Normal border
+                    fg="darkgreen"                         # Dark green text
                 )
             elif roundIndex < roundPointer:
-                # Completed rounds - different styling
+                # Completed rounds
                 button.config(
-                    text=f"✓ {roundName}",          # Checkmark indicator
-                    bg="palegreen",                # Pale green background
-                    font=("TkDefaultFont", 9, "normal"), # Normal font
-                    relief="raised",                # Normal raised style
-                    borderwidth=1,                  # Normal border
-                    fg="darkgreen"                  # Dark green text
+                    text=f"✓ {roundName}",                 # Checkmark indicator
+                    bg="palegreen",                        # Pale green background
+                    font=("TkDefaultFont", 9, "normal"),   # Normal font
+                    relief="raised",                       # Normal raised style
+                    borderwidth=1,                         # Normal border
+                    fg="darkgreen"                         # Dark green text
                 )
             else:
-                # Future rounds - normal styling
+                # Future round
                 button.config(
-                    text=f"  {roundName}",          # Indented (no indicator)
-                    bg="grey85",          # Default background
+                    text=f"  {roundName}",               # Indented (no indicator)
+                    bg="grey85",                         # Default background
                     font=("TkDefaultFont", 9, "normal"), # Normal font
-                    relief="raised",                # Normal raised style
-                    borderwidth=1,                  # Normal border
-                    fg="black"                      # Normal text color
+                    relief="raised",                     # Normal raised style
+                    borderwidth=1,                       # Normal border
+                    fg="black"                           # Normal text color
                 )
 
+    def runCheck(self):
+        """
+            Check if a run can be started. Ensures a run is defined, rounds exist, rounds remain to be run, and no other run is in progress.
+        """
+        if self.clueRun is None:
+            self._errorPopup("No run defined", "No run defined, Please create a run first.")
+            return False
+        if not self.clueRun.rounds:
+            self._errorPopup("No Rounds", "No rounds defined in the current run. Please add rounds before running.")
+            return False
+        if self.clueRun.getRoundPointer() >= len(self.clueRun.rounds):
+            self._errorPopup("All Rounds Completed", "All rounds in the current run have already been completed.")
+            return False
+        if self.runThread and self.runThread.is_alive():
+            self._errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before starting a new one.")
+            return False
+        return True
+    
     def runNextRound(self):
+        """
+            Execute the next round in the current CLUE run. Threaded to keep the UI responsive.
+        """
         try:
             Logger.log("Running CLUE: Starting the next round...")
-            _round = self.clueRun.runNextRound()
-            if _round < len(self.clueRun.rounds):
+            _round = self.clueRun.runNextRound() # Logically run the next round
+            
+            # Schedule the cleanup and graph building on the main thread
+            if _round < len(self.clueRun.rounds): # If there are more rounds to run after this one
                 self.mainwindow.after(0, self.cleanupAfterRun,
                             self.buttonRunNext,
                             self.clueRun.rounds[_round - 1],
@@ -716,7 +839,7 @@ class ClueGui(ClueGuiUI):
                             self.clueRun.baseFeaturesFile,
                             str(self.clueRun.rounds[_round - 1].roundDirectory),
                             True)
-            else:
+            else: # If this was the last round
                 self.mainwindow.after(0, self.cleanupAfterRun,
                             self.buttonRunNext,
                             self.clueRun.rounds[len(self.clueRun.rounds) - 1],
@@ -731,7 +854,7 @@ class ClueGui(ClueGuiUI):
             if ClueCancellation.isCancellationRequested():
                 Logger.log("Run Cancelled: The CLUE round was completed before it could be cancelled.")
                 ClueCancellation.clearCancellation()
-            self.mainwindow.after(0, self.updateActiveRoundButton)
+            self.updateActiveRoundButton()
         except clueutil.ClueCancelledException as e:
             errorMsg = str(e)
             self.mainwindow.after(0, self.onRunCancelled, self.buttonRunNext, errorMsg)
@@ -743,9 +866,14 @@ class ClueGui(ClueGuiUI):
             self.mainwindow.after(0, self.onRunError, self.buttonRunNext, errorMsg)
 
     def runRest(self):
+        """
+            Execute the remainder of the current CLUE run. Threaded to keep the UI responsive.
+        """
         try:
             Logger.log("Running CLUE: Starting the remainder of the CLUE run...")
-            self.clueRun.runRemainder()
+            self.clueRun.runRemainder() # Logically run the rest of the rounds
+
+            # Schedule the cleanup and graph building on the main thread
             self.mainwindow.after(0, self.cleanupAfterRun,
                             self.buttonRunRest,
                             self.clueRun.rounds[len(self.clueRun.rounds) - 1],
@@ -768,13 +896,15 @@ class ClueGui(ClueGuiUI):
             errorMsg = str(e)
             self.mainwindow.after(0, self.onRunError, self.buttonRunRest, errorMsg)
 
-    """
-        Execute the current CLUE run.
-    """
     def runClueFromBeginning(self):
+        """
+            Execute the entire CLUE run from the beginning. Threaded to keep the UI responsive.
+        """
         try:
             Logger.log("Running CLUE: Starting the CLUE run...")
-            self.clueRun.runFromBeginning()
+            self.clueRun.runFromBeginning() # Logically run the entire run from the beginning
+
+            # Schedule the cleanup and graph building on the main thread
             self.mainwindow.after(0, self.cleanupAfterRun,
                             self.buttonRunClue,
                             self.clueRun.rounds[len(self.clueRun.rounds) - 1],
@@ -797,28 +927,18 @@ class ClueGui(ClueGuiUI):
             errorMsg = str(e)
             self.mainwindow.after(0, self.onRunError, self.buttonRunClue, errorMsg)
 
-    def runCheck(self):
-        if self.clueRun is None:
-            self._errorPopup("No run defined", "No run defined, Please create a run first.")
-            return False
-        if not self.clueRun.rounds:
-            self._errorPopup("No Rounds", "No rounds defined in the current run. Please add rounds before running.")
-            return False
-        if self.clueRun.getRoundPointer() >= len(self.clueRun.rounds):
-            self._errorPopup("All Rounds Completed", "All rounds in the current run have already been completed.")
-            return False
-        if self.runThread and self.runThread.is_alive():
-            self._errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before starting a new one.")
-            return False
-        return True
-
     def runNextRoundButton(self):
+        """
+            Method called when the run next round button is clicked. Starts the next round in a separate thread.
+        """
         if not self.runCheck():
             return
+        
         #Set global run settings before run
         inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
         outputDirectory = self.builder.get_object("directory_entry", self.mainwindow).get()
         clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
+
         if not inputFile or not outputDirectory or not clueclustLocation:
             self._errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
             return
@@ -827,19 +947,24 @@ class ClueGui(ClueGuiUI):
             self.clueRun.updateBaseDirectory(str(outputDirectory))
             self.clueRun.CLUECLUST = str(clueclustLocation)
 
-            self.startRunningIndicator(self.buttonRunNext)
-            ClueCancellation.clearCancellation()
-            
+            self.startRunningIndicator(self.buttonRunNext)  # Start the running indicator on the button
+            ClueCancellation.clearCancellation()            # Clear any previous cancellation requests
+
             self.runThread = threading.Thread(target=self.runNextRound)
             self.runThread.start()
 
     def runRestButton(self):
+        """
+            Method called when the run rest button is clicked. Starts the remainder of the run in a separate thread.
+        """
         if not self.runCheck():
             return
+        
         #Set global run settings before run
         inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
         outputDirectory = self.builder.get_object("directory_entry", self.mainwindow).get()
         clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
+
         if not inputFile or not outputDirectory or not clueclustLocation:
             self._errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
             return
@@ -848,22 +973,24 @@ class ClueGui(ClueGuiUI):
             self.clueRun.updateBaseDirectory(str(outputDirectory))
             self.clueRun.CLUECLUST = str(clueclustLocation)
 
-            self.startRunningIndicator(self.buttonRunRest)
-            ClueCancellation.clearCancellation()
+            self.startRunningIndicator(self.buttonRunRest)  # Start the running indicator on the button
+            ClueCancellation.clearCancellation()            # Clear any previous cancellation requests
 
             self.runThread = threading.Thread(target=self.runRest)
             self.runThread.start()
 
-    """
-        Method called when the run button is clicked. Starts the CLUE run in a separate thread.
-    """
     def runClueButton(self):
+        """
+            Method called when the run clue button is clicked. Starts the entire run from the beginning in a separate thread.
+        """ 
         if not self.runCheck():
             return
+        
         #Set global run settings before run
         inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
         outputDirectory = self.builder.get_object("directory_entry", self.mainwindow).get()
         clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
+
         if not inputFile or not outputDirectory or not clueclustLocation:
             self._errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
             return
@@ -872,119 +999,17 @@ class ClueGui(ClueGuiUI):
             self.clueRun.updateBaseDirectory(str(outputDirectory))
             self.clueRun.CLUECLUST = str(clueclustLocation)
 
-            ClueCancellation.clearCancellation()
-            self.startRunningIndicator(self.buttonRunClue)
+            self.startRunningIndicator(self.buttonRunClue)  # Start the running indicator on the button
+            ClueCancellation.clearCancellation()            # Clear any previous cancellation requests
 
             self.runThread = threading.Thread(target=self.runClueFromBeginning)
             self.runThread.start()
 
-    @autoUpdateRounds
-    def resetRunButton(self):
-        if self.clueRun is None:
-            self._errorPopup("No run defined", "No run defined, Please create a run first.")
-            return
-        if self.runThread and self.runThread.is_alive():
-            self._errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before resetting.")
-            return
-        self.clueRun.resetRun()
-        Logger.log("Run Reset: " + self.clueRun.runName + " has been reset to the beginning.")
-
-    def cancelRunButton(self):
-        if self.clueRun is None:
-            self._errorPopup("No run defined", "No run defined, Please create a run first.")
-            return
-        if self.runThread and self.runThread.is_alive():
-            ClueCancellation.requestCancellation()
-            Logger.log("Run Cancellation Requested: Attempting to cancel the current CLUE run...")
-        else:
-            self._errorPopup("No Run in Progress", "No CLUE run is currently in progress to cancel.")
-
-    def onRunError(self, button, errorMsg):
-        self.stopRunningIndicator(button)
-        self._errorPopup("Clue Run Error", str(errorMsg))
-        self.runThread = None
-        self.updateActiveRoundButton()
-
-    def onRunCancelled(self, button, errorMsg):
-        self.stopRunningIndicator(button)
-        Logger.log("Run " + self.clueRun.runName + " has been cancelled: " + str(errorMsg))
-        self.runThread = None
-        self.updateActiveRoundButton()
-
-    """
-        Select the input file for the CLUE run.
-    """
-    def selectInputFile(self):
-        filePath = filedialog.askopenfilename(
-            parent=self.mainwindow,
-            title="Select Input File",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
-        )
-        if filePath:
-            self.clueRun.baseFile = str(filePath)
-            self.builder.get_object("input_file_entry", self.mainwindow).delete(0, tk.END)
-            self.builder.get_object("input_file_entry", self.mainwindow).insert(0, filePath)
-
-    """
-        Select the output directory for the CLUE run.
-    """
-    def selectOutputDirectory(self):
-        directoryPath = filedialog.askdirectory(
-            parent=self.mainwindow,
-            title="Select Output Directory"
-        )
-        if directoryPath:
-            self.clueRun.updateBaseDirectory(str(directoryPath))
-            self.builder.get_object("directory_entry", self.mainwindow).delete(0, tk.END)
-            self.builder.get_object("directory_entry", self.mainwindow).insert(0, str(directoryPath))
-
-    """
-        Select the location of the clueclust executable.
-    """
-    def selectClueclustLocation(self):
-        filePath = filedialog.askopenfilename(
-            parent=self.mainwindow,
-            title="Select Clueclust Jar",
-            filetypes=[("Jar files", "*.jar"), ("All files", "*.*")]
-        )
-        if filePath:
-            self.clueRun.CLUECLUST = str(filePath)
-            self.builder.get_object("clueclust_entry", self.mainwindow).delete(0, tk.END)
-            self.builder.get_object("clueclust_entry", self.mainwindow).insert(0, filePath)
-
-    def saveRun(self):
-        if self.clueRun is None:
-            self._errorPopup("No run defined", "No run defined, Please create a run first.")
-            return
-        
-        filePath = filedialog.asksaveasfilename(
-            parent=self.mainwindow,
-            title="Save CLUE Run",
-            defaultextension=".xml",
-            filetypes=[("CLUE XML Run files", "*.xml"), ("All files", "*.*")]
-        )
-        if filePath:
-            try:
-                clueserializer.serialize_cluerun(self.clueRun, filePath)
-                Logger.log(f"Run Saved: CLUE run saved to {filePath}.")
-            except clueutil.ClueException as e:
-                self._errorPopup("Error Saving Run", str(e))
-
-    def loadRun(self):
-        filePath = filedialog.askopenfilename(
-            parent=self.mainwindow,
-            title="Load CLUE Run",
-            filetypes=[("CLUE XML Run files", "*.xml"), ("All files", "*.*")]
-        )
-        if filePath:
-            try:
-                self.clueRun = clueserializer.deserialize_cluerun(filePath)
-                Logger.log(f"Run Loaded: CLUE run loaded from {filePath}.")
-            except clueutil.ClueException as e:
-                self._errorPopup("Error Loading Run", str(e))
-            self.buildExistingRun()
-
     def startRunningIndicator(self, button):
+        """ 
+            Start a flashing "Running" indicator on the given button and disable other run buttons. 
+        """
+        self.runningButton = button
         self.originalText = button.cget("text")
         self.isRunning = True
         self.flashState = 0
@@ -993,6 +1018,9 @@ class ClueGui(ClueGuiUI):
             btn.config(state="disabled")
     
     def stopRunningIndicator(self, button):
+        """ 
+            Stop the flashing "Running" indicator on the given button and re-enable other run buttons.
+        """
         self.isRunning = False
         if self.originalText:
             button.config(text=self.originalText)
@@ -1000,6 +1028,9 @@ class ClueGui(ClueGuiUI):
             btn.config(state="normal")
 
     def flashButton(self, button):
+        """
+            Flash the given button name to indicate running state.
+        """
         if self.isRunning:
             if self.flashState == 0:
                 button.config(text="Running    ")
@@ -1010,59 +1041,147 @@ class ClueGui(ClueGuiUI):
             elif self.flashState == 3:
                 button.config(text="Running... ")
             self.flashState = (self.flashState + 1) % 4
-            self.mainwindow.after(250, lambda: self.flashButton(button))
+            self.mainwindow.after(250, lambda: self.flashButton(button)) # Update every 250 ms
         else:
             button.config(text=self.originalText, state="normal")
 
-    #Build a popup for settings for a callback from the settings menu, this should have a file
-    #selection for the log file location and a checkbox for enabling/disabling logging to file
+    @autoUpdateRounds
+    def resetRunButton(self):
+        """
+            Reset the current run to the beginning, allowing all rounds to be run again.
+        """
+        if self.clueRun is None:
+            self._errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        if self.runThread and self.runThread.is_alive():
+            self._errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before resetting.")
+            return
+        self.clueRun.resetRun()
+        Logger.log("Run Reset: " + self.clueRun.runName + " has been reset to the beginning.")
+
+    def cancelRunButton(self):
+        """
+            Cancel the currently running CLUE run.
+            This sets a cancellation flag that is checked periodically during the run.
+        """
+        if self.clueRun is None:
+            self._errorPopup("No run defined", "No run defined, Please create a run first.")
+            return
+        if self.runThread and self.runThread.is_alive():
+            ClueCancellation.requestCancellation()
+            Logger.log("Run Cancellation Requested: Attempting to cancel the current CLUE run...")
+        else:
+            self._errorPopup("No Run in Progress", "No CLUE run is currently in progress to cancel.")
+
+    def onRunError(self, button, errorMsg):
+        """
+            Handle errors that occur during the CLUE run, displaying an error popup and stopping the running indicator.
+        """
+        self.stopRunningIndicator(button)
+        self._errorPopup("Clue Run Error", str(errorMsg))
+        self.runThread = None
+        self.updateActiveRoundButton()
+
+    def onRunCancelled(self, button, errorMsg):
+        """
+            Handle cancellation of the CLUE run, displaying a cancellation message and stopping the running indicator.
+        """
+        self.stopRunningIndicator(button)
+        Logger.log("Run " + self.clueRun.runName + " has been cancelled: " + str(errorMsg))
+        self.runThread = None
+        self.updateActiveRoundButton()
+
+    def selectInputFile(self):
+        """
+            Select the input file for the CLUE run.
+        """
+        filePath = filedialog.askopenfilename(
+            parent=self.mainwindow,
+            title="Select Input File",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        if filePath:
+            self.clueRun.baseFile = str(filePath)
+            self.builder.get_object("input_file_entry", self.mainwindow).delete(0, tk.END)
+            self.builder.get_object("input_file_entry", self.mainwindow).insert(0, filePath)
+
+    def selectOutputDirectory(self):
+        """
+            Select the output directory for the CLUE run.
+        """
+        directoryPath = filedialog.askdirectory(
+            parent=self.mainwindow,
+            title="Select Output Directory"
+        )
+        if directoryPath:
+            self.clueRun.updateBaseDirectory(str(directoryPath))
+            self.builder.get_object("directory_entry", self.mainwindow).delete(0, tk.END)
+            self.builder.get_object("directory_entry", self.mainwindow).insert(0, str(directoryPath))
+
+    def selectClueclustLocation(self):
+        """
+            Select the location of the Clueclust jar file.
+        """
+        filePath = filedialog.askopenfilename(
+            parent=self.mainwindow,
+            title="Select Clueclust Jar",
+            filetypes=[("Jar files", "*.jar"), ("All files", "*.*")]
+        )
+        if filePath:
+            self.clueRun.CLUECLUST = str(filePath)
+            self.builder.get_object("clueclust_entry", self.mainwindow).delete(0, tk.END)
+            self.builder.get_object("clueclust_entry", self.mainwindow).insert(0, filePath)
+
     def logSettingsPopup(self):
+        """
+            Create a popup to adjust logging settings, including toggling file logging and selecting the log file.
+        """
+
+        # Create the popup window
         popup = tk.Toplevel(self.mainwindow)
         popup.title("Log Settings")
         popup.grab_set()
         popup.focus_force()
         popup.columnconfigure(0, weight=1)
         popup.rowconfigure(0, weight=1)
+
         settingsFrame = tk.Frame(popup, padx=10, pady=10)
         settingsFrame.grid(row=0, column=0, padx=10, pady=5, stick="nsew")
-        #Log to file checkbox   
+
+        # Log to file checkbox, logs to file if enabled and file is selected
         logToFileVar = tk.BooleanVar(value=Logger.logToFile)
         tk.Checkbutton(settingsFrame, text="Log to File", variable=logToFileVar).grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        #Log file selection
+
+        # Log file selection
         tk.Label(settingsFrame, text="Log File:").grid(row=0, column=1, padx=5, pady=5, sticky="e")
         logFileEntry = tk.Entry(settingsFrame)
         logFileEntry.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
-        logFileEntry.insert(0, Logger.logFile.name if Logger.logFile else "")  # <-- Set initial value
+        logFileEntry.insert(0, Logger.logFile.name if Logger.logFile else "")
+
+        # Browse button to select log file
         logFileButton = tk.Button(
             settingsFrame,
             text="Browse",
             command=lambda: self._chooseFile(logFileEntry, popup, type=("Log files", "*.log"))
         )
         logFileButton.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
-        #On clicking OK, update the Logger settings
+
         def onOk():
+            """
+                Apply the logging settings from the popup.
+            """
             Logger.logToFile = logToFileVar.get()
             Logger.setLogFile(str(logFileEntry.get()) or None)
             Logger.log("Settings Updated: Logging settings have been updated.")
             popup.destroy()
+
         tk.Button(popup, text="OK", command=onOk).grid(row=2, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=2, column=1, padx=5, pady=10)
 
-    """
-        Helper class to redirect stdout to a text widget in the GUI. NOT USED
-    """
-    class TextRedirector:
-        def __init__(self, text_widget):
-            self.text_widget = text_widget
-
-        def write(self, text):
-            self.text_widget.insert(tk.END, text)
-            self.text_widget.see(tk.END)
-
-        def flush(self):
-            pass  # Needed for Python's stdout
-
     def updateQueue(self):
+        """
+            Periodically check the Logger's message queue and update the text box with new messages.
+        """
         messages = Logger.getQueuedMessages()
         for msg in messages:
             if msg.endswith('\n'):
@@ -1073,6 +1192,9 @@ class ClueGui(ClueGuiUI):
         self.mainwindow.after(100, self.updateQueue)  # Check the queue every 100 ms
 
     def __init__(self, master=None):
+        """
+            Initialize the GUI components.
+        """
         super().__init__(master)
         self.runThread = None
         self.clueRun = None
@@ -1081,8 +1203,7 @@ class ClueGui(ClueGuiUI):
         self.runningButton = None
 
         self.mainwindow = self.builder.get_object("base_frame", master)
-        self.roundsFrame = self.builder.get_object("rounds_list_frame")
-
+        
         menuCommandAddRound = self.builder.get_object("new_round_button", self.mainwindow)
         menuCommandAddRound.config(command=self.addRound)
 
@@ -1094,6 +1215,8 @@ class ClueGui(ClueGuiUI):
 
         menuCommandMoveRoundDown = self.builder.get_object("move_round_down_button", self.mainwindow)
         menuCommandMoveRoundDown.config(command=self.moveRoundDown)
+
+        self.roundsFrame = self.builder.get_object("rounds_list_frame")
 
         buttonRunClue = self.builder.get_object("run_button", self.mainwindow)
         buttonRunClue.config(command=self.runClueButton)
@@ -1114,6 +1237,7 @@ class ClueGui(ClueGuiUI):
         buttonCancelRun = self.builder.get_object("cancel_run_button", self.mainwindow)
         buttonCancelRun.config(command=self.cancelRunButton)
 
+        # Buttons to block while a run is in progress
         self.blockButtons = [buttonRunClue, buttonRunRest, buttonRunNext, buttonResetRun]
 
         buttonChangeInput = self.builder.get_object("input_file_button", self.mainwindow)
@@ -1126,15 +1250,13 @@ class ClueGui(ClueGuiUI):
         buttonChangeClueclust.config(command=self.selectClueclustLocation)
 
         self.textBox = self.builder.get_object("output_text", self.mainwindow)
-        #sys.stdout = self.TextRedirector(textBox)
 
         self.plotNotebook = self.builder.get_object("plots_notebook", self.mainwindow)
 
         self.builder.connect_callbacks(self)
 
         Logger.enableQueue()
-        self.updateQueue()
-
+        self.updateQueue() #Start the queue update loop
 
 if __name__ == "__main__":
     app = ClueGui()
