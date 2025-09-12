@@ -750,6 +750,7 @@ class ClueRun:
                                                         self.rounds[0].featureSelectionFile, 
                                                         None  #No cluster selection file for first round
                                             )
+                newInputs = newInputs.reset_index(drop=True) #Reset index to ensure it is sequential from 0
                 Path(self.rounds[0].roundDirectory).mkdir(exist_ok=True) #Build round directory
                 newInputs.to_csv(path_or_buf=self.rounds[0].inputFile, header=False, index=False)
                 prevRound = self.rounds[0]
@@ -775,7 +776,7 @@ class ClueRun:
                                                         prevMetadataFD, 
                                                         currRound.featureSelectionFile, 
                                                         currRound.clusterSelectionFile)
-                
+                newInputs = newInputs.reset_index(drop=True) #Reset index to ensure it is sequential from 0
                 Path(currRound.roundDirectory).mkdir(exist_ok=True)
                 newInputs.to_csv(path_or_buf=currRound.inputFile, header=False, index=False)
                 currRound.runRound(self.CLUECLUST)

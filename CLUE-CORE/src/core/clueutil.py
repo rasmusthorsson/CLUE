@@ -328,11 +328,12 @@ class InputFilter:
                 selectionFile.close()
                 filteredSelectionDF = InputFilter.filterSelection(commands, metadataDF)
                 filteredClustersDF = clustersDF.loc[clustersDF.iloc[:, 1].isin(map(int, filteredSelectionDF["ClusterId"]))]
-                nextInput = nextInput.loc[nextInput.iloc[:, 0].isin(filteredClustersDF.iloc[:, 0].array)]
+                
+                nextInput = nextInput.loc[nextInput["ID"].isin(filteredClustersDF.iloc[:, 0].array)]
             else:
                 # Remove noise if no selection file is provided as noise has to be explicitly included
                 noNoiseClustersDF = clustersDF.loc[clustersDF.iloc[:, 1] != -1]
-                nextInput = nextInput.loc[nextInput.iloc[:, 0].isin(noNoiseClustersDF.iloc[:, 0].array)]
+                nextInput = nextInput.loc[nextInput["ID"].isin(noNoiseClustersDF.iloc[:, 0].array)]
         elif (clustersFD and not metadataFD): #MetadataFD does not exist
             ClueLogger.log("Warning: Metadata file does not exist but clusters file does, skipping filtering...")
         elif (metadataFD and not clustersFD): #ClustersDF does not exist
@@ -356,23 +357,54 @@ class ClueGraphing:
 #Each graph function should plot the graph on the provided axis and not return anything.
 #The graph functions should also log to the ClueLogger as needed.
 
+    def _calculateMeans(inputDataFrame, clustersDataFrame):
+        """
+            Calculates the mean of each cluster, excluding the first column (ID).
+            Returns four lists, the means, the cluster IDs, the lower quartile and the upper quartile.
+        """
+        means = []
+        clusterIds = []
+        lowerQuartile = []
+        upperQuartile = []
+        for cluster in clustersDataFrame[1].unique():
+            clusterData = inputDataFrame[inputDataFrame["ID"].isin(clustersDataFrame[clustersDataFrame[1] == cluster][0])]
+            means.append(clusterData.mean(axis=0).tolist())
+            clusterIds.append(cluster)
+            lowerQuartile.append(clusterData.quantile(0.25, axis=0).tolist())
+            upperQuartile.append(clusterData.quantile(0.75, axis=0).tolist())
+        return means, clusterIds, lowerQuartile, upperQuartile
+
     def _rawBands(clueRound, baseInputFD, baseFeaturesFD, ax):
         """
             Plots the raw bands of the mean data for each cluster.
         """
         ClueLogger.logToFileOnly("__rawBands called")
-        metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
-        averagesColumns = [col for col in metadataDF.columns if col.startswith('OrigMean')]
+        means, cluster_ids, lower_bounds, upper_bounds = ClueGraphing._calculateMeans(
+                                    pd.read_csv(baseInputFD), 
+                                    pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile, header=None))
+        
         lines = []
-        legendLabels = []
-        for rowIndex in range(len(metadataDF)):
-            legendLabels.append("Cluster " + str(metadataDF["ClusterId"].iloc[rowIndex]))
-            line = ax.plot(metadataDF[averagesColumns].iloc[rowIndex])
-            lines.append(line)
+        for rowIndex in range(len(means)):
+
+            xValues = range(len(means[rowIndex]) - 1)  # Skip the ID column
+
+            # Plot the mean line
+            meanLine, = ax.plot(means[rowIndex][1:], label=f"Cluster {cluster_ids[rowIndex]}")  # Skip the ID column
+
+            # Plot the upper and lower bounds as a filled area
+            ax.fill_between(
+                xValues,
+                lower_bounds[rowIndex][1:],      # Lower bound (skip ID column)
+                upper_bounds[rowIndex][1:],      # Upper bound (skip ID column)
+                color=meanLine.get_color(),
+                alpha=0.2
+            )
+            #line = ax.plot(metadataDF[averagesColumns].iloc[rowIndex])
+            lines.append(meanLine)
 
         xTicks = []
         xLabels = []
-        for index in range(len(averagesColumns)):
+        for index in range(len(means[0]) - 1): #Skip the ID column
             if (index % 2 == 0):
                 xLabels.append("Timestep " + str(index + 1))
                 xTicks.append(index)
@@ -382,8 +414,8 @@ class ClueGraphing:
         ax.tick_params(axis='x', rotation=45)
         ax.set_xlabel("Measurement Timestep")
         ax.set_ylabel("Consumption")
-
-        ax.legend(legendLabels)
+        ax.legend(handles=lines, title="Clusters", bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.set_title("Mean Raw Data with Interquartile Range")
 
     def _featureProfiles(clueRound, baseInputFD, baseFeaturesFD, ax): #TODO Use feature selection to limit plotted features
         """
@@ -391,7 +423,7 @@ class ClueGraphing:
         """
         ClueLogger.logToFileOnly("__featureProfiles called")
         baseFeaturesDF = pd.read_csv(baseFeaturesFD)
-        clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile)
+        clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile, header=None)
         metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
         filteredFeaturesDF = InputFilter.filter(baseFeaturesDF, 
                                                 clueRound.roundDirectory + clueRound.clustersFile, 

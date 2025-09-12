@@ -31,8 +31,6 @@ public class ClusterMetadata {
         this.clusterId = clusterId;
         this.size = 0;
 
-
-        System.out.println("Number of dimensions: " + dimensions);
         // Initialize min and max bounds
         this.minBounds = new ArrayList<>(dimensions);
         this.maxBounds = new ArrayList<>(dimensions);

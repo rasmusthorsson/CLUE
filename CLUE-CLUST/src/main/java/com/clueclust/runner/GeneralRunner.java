@@ -24,7 +24,7 @@ public class GeneralRunner implements Runner {
         try {
             // Read dataset
             Dataset dataset = new Dataset();
-            dataset.setHasHeader(true);
+            dataset.setHasHeader(false);
             dataset.setDelimiter(",");
             long startTime = System.nanoTime();
             dataset.readData(params.getFileName());
