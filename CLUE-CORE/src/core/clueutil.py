@@ -7,6 +7,8 @@ import time
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+from sklearn.preprocessing import StandardScaler
 
 class ClueCancellation:
     """
@@ -315,8 +317,6 @@ class InputFilter:
             clustersDF = pd.read_csv(clustersFD, header=None)
             metadataDF = pd.read_csv(metadataFD)
             if (clustersDF.empty or metadataDF.empty):
-                #TODO Fix so that noise can be used as an explicit cluster if desired, also if no clusters found, return special exception to allow
-                #run to reset to previous round?
                 ClueLogger.log("Either cluster or metadata file is empty, meaning no clusters were found in the previous round, stopping run...")
                 raise ClueException("Clusters or metadata file is empty, cannot filter input")
             if (selectionFD):
@@ -374,34 +374,129 @@ class ClueGraphing:
             upperQuartile.append(clusterData.quantile(0.75, axis=0).tolist())
         return means, clusterIds, lowerQuartile, upperQuartile
 
+    def _tSNE(clueRound, baseInputFD, baseFeaturesFD, ax):
+        """ 
+            Plots a t-SNE graph using scikit-learn (much faster and more reliable).
+        """
+        
+        ClueLogger.logToFileOnly("_tSNE called")
+        
+        # Load and filter data
+        filteredInputDF = InputFilter.filter(pd.read_csv(baseInputFD), 
+                                            clueRound.roundDirectory + clueRound.clustersFile, 
+                                            clueRound.roundDirectory + clueRound.metadataFile, 
+                                            None, 
+                                            None)
+        clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile, header=None)
+        
+        # Prepare feature matrix (exclude ID column)
+        featureMatrix = filteredInputDF.iloc[:, 1:].values.astype(float)
+        
+        # Handle insufficient data
+        if len(featureMatrix) < 2:
+            ax.text(0.5, 0.5, 'Insufficient data for t-SNE\n(need at least 2 points)', 
+                    ha='center', va='center', transform=ax.transAxes, fontsize=12)
+            ax.set_title('t-SNE Visualization - Insufficient Data')
+            return
+        
+        # Get cluster labels
+        clusterLabels = []
+        for _, row in filteredInputDF.iterrows():
+            dataId = row['ID']
+            clusterMatch = clustersDF[clustersDF.iloc[:, 0] == dataId]
+            if len(clusterMatch) > 0:
+                clusterLabels.append(clusterMatch.iloc[0, 1])
+            else:
+                clusterLabels.append(-1)  # Noise
+        
+        nSamples = len(featureMatrix)
+        ClueLogger.log(f"Running optimized t-SNE with {nSamples} samples...")
+        
+        # Standardize features for better t-SNE results
+        scaler = StandardScaler()
+        featureMatrixScaled = scaler.fit_transform(featureMatrix)
+        
+        # Configure t-SNE with optimal parameters
+        perplexity = min(30, max(5, nSamples // 3))
+        
+        # Use optimized scikit-learn t-SNE
+        tsne = TSNE(
+            n_components=2,
+            perplexity=perplexity,
+            learning_rate='auto',
+            max_iter=1000,
+            random_state=42,
+            method='barnes_hut' if nSamples > 250 else 'exact',
+            n_jobs=-1 # Use all available CPU cores
+        )
+        
+        embedding = tsne.fit_transform(featureMatrixScaled)
+        
+        # Plot results
+        uniqueClusters = np.unique(clusterLabels)
+        colors = plt.cm.tab10(np.linspace(0, 1, len(uniqueClusters)))
+        
+        for i, clusterId in enumerate(uniqueClusters):
+            mask = np.array(clusterLabels) == clusterId
+            pointsInCluster = np.sum(mask)
+            
+            if clusterId == -1:
+                ax.scatter(embedding[mask, 0], embedding[mask, 1], 
+                        c='lightgray', marker='x', s=40, alpha=0.6, 
+                        label=f'Noise ({pointsInCluster})')
+            else:
+                ax.scatter(embedding[mask, 0], embedding[mask, 1], 
+                        c=[colors[i % len(colors)]], s=50, alpha=0.8, 
+                        label=f'Cluster {clusterId} ({pointsInCluster})')
+        
+        ax.set_xlabel('t-SNE Dimension 1')
+        ax.set_ylabel('t-SNE Dimension 2')
+        ax.set_title('t-SNE Visualization of Clusters')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.grid(True, alpha=0.3)
+        
+        ClueLogger.log("t-SNE visualization completed successfully")
+
     def _rawBands(clueRound, baseInputFD, baseFeaturesFD, ax):
         """
             Plots the raw bands of the mean data for each cluster.
         """
-        ClueLogger.logToFileOnly("__rawBands called")
-        means, cluster_ids, lower_bounds, upper_bounds = ClueGraphing._calculateMeans(
-                                    pd.read_csv(baseInputFD), 
-                                    pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile, header=None))
-        
+        ClueLogger.logToFileOnly("_rawBands called")
+
+        #Filters noise out by default - TODO Allow noise to be included if desired
+        filteredInputDF = InputFilter.filter(pd.read_csv(baseInputFD), 
+                                            clueRound.roundDirectory + clueRound.clustersFile, 
+                                            clueRound.roundDirectory + clueRound.metadataFile, 
+                                            None, 
+                                            None)
+        #filteredInputDF = pd.read_csv(baseInputFD) ¤ Alternative to allow noise to be included
+        clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile, header=None)
+
+        #Calculate means and bounds, do not use metadata as the clustering might have been based on features
+        means, clusterIds, lowerBounds, upperBounds = ClueGraphing._calculateMeans(
+                                    filteredInputDF, 
+                                    clustersDF)
+
+        # Create the plot lines
         lines = []
         for rowIndex in range(len(means)):
 
             xValues = range(len(means[rowIndex]) - 1)  # Skip the ID column
 
             # Plot the mean line
-            meanLine, = ax.plot(means[rowIndex][1:], label=f"Cluster {cluster_ids[rowIndex]}")  # Skip the ID column
+            meanLine, = ax.plot(means[rowIndex][1:], label=f"Cluster {clusterIds[rowIndex]}")  # Skip the ID column
 
             # Plot the upper and lower bounds as a filled area
             ax.fill_between(
                 xValues,
-                lower_bounds[rowIndex][1:],      # Lower bound (skip ID column)
-                upper_bounds[rowIndex][1:],      # Upper bound (skip ID column)
+                lowerBounds[rowIndex][1:],      # Lower bound (skip ID column)
+                upperBounds[rowIndex][1:],      # Upper bound (skip ID column)
                 color=meanLine.get_color(),
                 alpha=0.2
             )
-            #line = ax.plot(metadataDF[averagesColumns].iloc[rowIndex])
             lines.append(meanLine)
 
+        # Customize the x-axis
         xTicks = []
         xLabels = []
         for index in range(len(means[0]) - 1): #Skip the ID column
@@ -409,6 +504,7 @@ class ClueGraphing:
                 xLabels.append("Timestep " + str(index + 1))
                 xTicks.append(index)
         
+        # Set x-ticks and labels
         ax.set_xticks(ticks=xTicks)
         ax.set_xticklabels(labels=xLabels)
         ax.tick_params(axis='x', rotation=45)
@@ -421,22 +517,31 @@ class ClueGraphing:
         """
             Plots the feature profiles of the mean features for each cluster.
         """
-        ClueLogger.logToFileOnly("__featureProfiles called")
+        ClueLogger.logToFileOnly("_featureProfiles called")
+
+        #Features are already calulated, just need to filter based on clusters and metadata and then calculate means
         baseFeaturesDF = pd.read_csv(baseFeaturesFD)
         clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile, header=None)
         metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
+
+        # Filter out noise by default - TODO Allow noise to be included if desired
         filteredFeaturesDF = InputFilter.filter(baseFeaturesDF, 
                                                 clueRound.roundDirectory + clueRound.clustersFile, 
                                                 clueRound.roundDirectory + clueRound.metadataFile, 
                                                 None, 
                                                 None)
+        
+        # Split IDs into found clusters
         uniqueClusters = metadataDF.iloc[:, 0].unique()
         clusterFeaturesDict = {}
         for cluster in uniqueClusters:
+            if cluster == -1:
+                continue #Skip noise
             clusterIDsDF = clustersDF.loc[clustersDF.iloc[:, 1] == cluster].iloc[:, 0]
             clusterFilteredFeaturesDF = filteredFeaturesDF.loc[filteredFeaturesDF["ID"].isin(clusterIDsDF.array)]
             clusterFeaturesDict[cluster] = clusterFilteredFeaturesDF
 
+        #Calculate feature averages for each cluster
         clusterFeatureAverages = []
         for clusterFeatures in clusterFeaturesDict.values():
             featureAverages = []
@@ -462,17 +567,20 @@ class ClueGraphing:
                 normalizedAverage = (average - np.min(average)) / rng + offset
             normalizedTransposedAverages.append(normalizedAverage)
 
-        normalizedAverages = np.transpose(normalizedTransposedAverages) #TODO Do not transpose
+        normalizedAverages = np.transpose(normalizedTransposedAverages)
         
+        #Create the heatmap
         heatmap = ax.imshow(normalizedAverages, cmap="Oranges")
         plt.colorbar(heatmap, ticks=[])
         ax.set_xticks(ticks=np.arange(len(xAxis)), labels=xAxis)
         ax.tick_params(axis='x', rotation=45)
         ax.set_yticks(ticks=np.arange(len(yAxis)), labels=yAxis)
-
         ax.set_xlabel("Feature")
         ax.set_ylabel("Cluster")
+        ax.set_anchor('C')
+        ax.set_title("Cluster Feature Profiles")
         
+        #Add text annotations to each cell
         for column in range(len(clusterFeatureAverages)):
             for row in range(len(clusterFeatureAverages[column])):
                 ax.text(row, 
@@ -482,12 +590,16 @@ class ClueGraphing:
                          va="center", 
                          color="black")
 
-
+    #TODO Possibly allow for more fine-grained selection of graphs to generate
     #Add new plots here
-    _graphDict = {
+    _graphDictFast = {
         "Mean Raw Data" : _rawBands,
-        "Feature Profiles" : _featureProfiles
+        "Feature Profiles" : _featureProfiles,
         }
+
+    _graphDictSlow = {
+        "t-SNE Visualization" : _tSNE
+    }
 
 #-------------------------------------------------------------------------------
 
@@ -495,7 +607,7 @@ class ClueGraphing:
         pass
 
     @staticmethod
-    def generateGraphs(clueRound, baseInputFD, baseFeaturesFD, outputDirectory=None, directOutput=False):
+    def generateGraphs(clueRound, baseInputFD, baseFeaturesFD, outputDirectory=None, directOutput=False, fastOnly=False):
         """
             Generates all graphs for a given CLUE round based on a specific round, uses the files from that round and the base input and features files.
             If an output directory is specified, saves the graphs to that directory as PNG files.
@@ -508,6 +620,10 @@ class ClueGraphing:
             raise ClueException("In order to generate graphs, please select an outputDirectory or set directOutput to True")
         if (directOutput):
             plt.ioff()
+        if (fastOnly):
+            ClueGraphing._graphDict = ClueGraphing._graphDictFast
+        else:
+            ClueGraphing._graphDict = {**ClueGraphing._graphDictFast, **ClueGraphing._graphDictSlow}
         for graphIndex, graphFunction in enumerate(ClueGraphing._graphDict.values()):
             fig, ax = plt.subplots(constrained_layout=True)
             graphFunction(clueRound, baseInputFD, baseFeaturesFD, ax)

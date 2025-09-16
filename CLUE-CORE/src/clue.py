@@ -712,7 +712,7 @@ class ClueGui(ClueGuiUI):
         toolbar.update()
         toolbar.pack(side=tk.TOP, fill="both")
 
-    def buildGraphs(self, round, baseFile, baseFeaturesFile, outputDirectory, directOutput):
+    def buildGraphs(self, round, baseFile, baseFeaturesFile, outputDirectory, directOutput, fastGraphsOnly):
         """
             Build the graphs for the given round and add them to the UI.
         """
@@ -722,7 +722,8 @@ class ClueGui(ClueGuiUI):
                 baseFile,
                 baseFeaturesFile,
                 outputDirectory=outputDirectory,
-                directOutput=directOutput
+                directOutput=directOutput,
+                fastOnly=fastGraphsOnly
             )
         except clueutil.ClueException as e:
             self._errorPopup("Graph Generation Error", str(e))
@@ -746,13 +747,13 @@ class ClueGui(ClueGuiUI):
             else:
                 self._errorPopup("No figure found for graph: ", name)
 
-    def cleanupAfterRun(self, button, finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput):
+    def cleanupAfterRun(self, button, finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput, fastGraphsOnly=True):
         """
             Cleanup the UI after a run has completed, re-enabling buttons and building graphs.
         """
         self.stopRunningIndicator(button)
         self.runThread = None
-        self.buildGraphs(finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput)
+        self.buildGraphs(finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput, fastGraphsOnly=fastGraphsOnly)
 
     def updateActiveRoundButton(self):
         """
@@ -842,13 +843,14 @@ class ClueGui(ClueGuiUI):
                             str(self.clueRun.rounds[_round - 1].roundDirectory),
                             True)
             else: # If this was the last round
-                self.mainwindow.after(0, self.cleanupAfterRun,
+                self.mainwindow.after(0, lambda: self.cleanupAfterRun(
                             self.buttonRunNext,
                             self.clueRun.rounds[len(self.clueRun.rounds) - 1],
                             self.clueRun.baseFile,
                             self.clueRun.baseFeaturesFile,
                             str(self.clueRun.targetRunDirectory) + "/" + self.clueRun.outputDirectory,
-                            True)
+                            True,
+                            fastGraphsOnly=False))
             if self.clueRun.getRoundPointer() < len(self.clueRun.rounds):
                 Logger.log("Round Complete: The current round has completed successfully. Ready for the next round.")
             else:
