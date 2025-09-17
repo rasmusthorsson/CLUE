@@ -283,12 +283,15 @@ class ClueRound:
         #Generate config-dependent components of call
         call += self.clueConfig.getOptimizeCallOpts()
 
-        proc = subprocess.Popen(call,
+        try:
+            proc = subprocess.Popen(call, 
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.STDOUT, 
                     text=True,
                     bufsize=1)
-        
+        except FileNotFoundError as e:
+            raise clueutil.ClueException("Could not find Java runtime to execute CLUECLUST jar file. Please ensure Java is installed and available in your system PATH.") from e
+
         outputQueue = queue.Queue() # Instead of direct queueing to for threadsafe logging, only main thread is used for logging now
 
         def readOutput():
@@ -388,13 +391,15 @@ class ClueRound:
             self._runParamOptimizer(CLUECLUST)
         
         call = self._buildCall(CLUECLUST)
-
-        proc = subprocess.Popen(call, 
+        try:
+            proc = subprocess.Popen(call, 
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.STDOUT, 
                     text=True,
                     bufsize=1)
-        
+        except FileNotFoundError as e:
+            raise clueutil.ClueException("Could not find Java runtime to execute CLUECLUST jar file. Please ensure Java is installed and available in your system PATH.") from e
+
         outputQueue = queue.Queue() # Instead of direct queueing to for threadsafe logging, only main thread is used for logging now
 
         def readOutput():

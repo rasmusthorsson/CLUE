@@ -4,6 +4,9 @@
 CLUE-CORE/.ipynb_checkpoints/
 testfiles/
 Demo/
+Demos/
+*.pyc
+__pycache__/
 .vscode/
 *.swp
 

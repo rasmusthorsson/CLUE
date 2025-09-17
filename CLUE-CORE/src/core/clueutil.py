@@ -374,6 +374,8 @@ class ClueGraphing:
             upperQuartile.append(clusterData.quantile(0.75, axis=0).tolist())
         return means, clusterIds, lowerQuartile, upperQuartile
 
+    #TODO Separate calculations and plotting for graphs to allow threading of calculations
+    @staticmethod
     def _tSNE(clueRound, baseInputFD, baseFeaturesFD, ax):
         """ 
             Plots a t-SNE graph using scikit-learn (much faster and more reliable).
@@ -427,7 +429,7 @@ class ClueGraphing:
             max_iter=1000,
             random_state=42,
             method='barnes_hut' if nSamples > 250 else 'exact',
-            n_jobs=-1 # Use all available CPU cores
+            n_jobs=1  # Use single core to avoid threading issues
         )
         
         embedding = tsne.fit_transform(featureMatrixScaled)

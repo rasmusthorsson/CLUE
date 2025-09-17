@@ -751,9 +751,9 @@ class ClueGui(ClueGuiUI):
         """
             Cleanup the UI after a run has completed, re-enabling buttons and building graphs.
         """
+        self.buildGraphs(finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput, fastGraphsOnly=fastGraphsOnly)
         self.stopRunningIndicator(button)
         self.runThread = None
-        self.buildGraphs(finalRound, baseFile, baseFeaturesFile, outputDirectory, directOutput, fastGraphsOnly=fastGraphsOnly)
 
     def updateActiveRoundButton(self):
         """
@@ -835,7 +835,7 @@ class ClueGui(ClueGuiUI):
             
             # Schedule the cleanup and graph building on the main thread
             if _round < len(self.clueRun.rounds): # If there are more rounds to run after this one
-                self.mainwindow.after(0, self.cleanupAfterRun,
+                self.cleanupAfterRun(
                             self.buttonRunNext,
                             self.clueRun.rounds[_round - 1],
                             self.clueRun.baseFile,
@@ -843,14 +843,14 @@ class ClueGui(ClueGuiUI):
                             str(self.clueRun.rounds[_round - 1].roundDirectory),
                             True)
             else: # If this was the last round
-                self.mainwindow.after(0, lambda: self.cleanupAfterRun(
+                self.cleanupAfterRun(
                             self.buttonRunNext,
                             self.clueRun.rounds[len(self.clueRun.rounds) - 1],
                             self.clueRun.baseFile,
                             self.clueRun.baseFeaturesFile,
                             str(self.clueRun.targetRunDirectory) + "/" + self.clueRun.outputDirectory,
                             True,
-                            fastGraphsOnly=False))
+                            fastGraphsOnly=False)
             if self.clueRun.getRoundPointer() < len(self.clueRun.rounds):
                 Logger.log("Round Complete: The current round has completed successfully. Ready for the next round.")
             else:
