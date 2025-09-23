@@ -579,6 +579,25 @@ class ClueRun:
                 return
         raise clueutil.ClueException("Round with name " + roundName + " not found, cannot remove.")
 
+    def previousRound(self):
+        """
+            Moves the round pointer back one round, if not already at the first round.
+        """
+        Logger.logToFileOnly("previousRound called")
+        if (self._roundPointer > 0):
+            self._roundPointer -= 1
+        else:
+            raise clueutil.ClueException("Already at the first round, cannot move back.")
+        
+    def getActiveRound(self):
+        """
+            Returns the currently active round, or None if at the beginning before any rounds have been run.
+        """
+        Logger.logToFileOnly("getActiveRound called")
+        if (self._roundPointer == 0):
+            return None
+        return self.rounds[self._roundPointer]
+
     def updateBaseFile(self, baseFile):
         """
             Updates the baseFile and resets run if it has changed.

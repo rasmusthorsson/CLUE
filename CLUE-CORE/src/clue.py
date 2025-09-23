@@ -264,6 +264,9 @@ class ClueGui(ClueGuiUI):
                             Callback when the round button is clicked, calls the original function to open the round popup with current settings.
                             Results in different behaviour from the initial creation of the round since the round already exists.
                         """
+                        if self.runThread is not None and self.runThread.is_alive():
+                            self._errorPopup("Run In Progress", "Cannot change rounds while a run is in progress.")
+                            return
                         clueRound = self.clueRun.getRound(name)
                         clueConfig = clueRound.clueConfig
 
@@ -339,7 +342,9 @@ class ClueGui(ClueGuiUI):
         if self.clueRun is None:
             self._errorPopup("No run defined", "No run defined, Please create a run first.")
             return
-        
+        if self.runThread is not None and self.runThread.is_alive():
+            self._errorPopup("Run In Progress", "Cannot change rounds while a run is in progress.")
+            return
         #Create a popup dialog to configure the round
         self.buildRoundPopup()
 
@@ -351,11 +356,12 @@ class ClueGui(ClueGuiUI):
         if self.clueRun is None:
             self._errorPopup("No run defined", "No run defined, Please create a run first.")
             return
-
         if self.clueRun.getRound(_round) is None:
             self._errorPopup("Round Not Found", f"Round '{_round}' does not exist.")
             return
-
+        if self.runThread is not None and self.runThread.is_alive():
+            self._errorPopup("Run In Progress", "Cannot change rounds while a run is in progress.")
+            return
         def roundClick():
             #Grab values from dictionary and Logger.log them
             clueRound = self.clueRun.getRound(_round)
@@ -390,10 +396,8 @@ class ClueGui(ClueGuiUI):
         """
             Delete a round from the current run and remove it from the UI.
         """
-        if self.clueRun is None:
-            self._errorPopup("No run defined", "No run defined, Please create a run first.")
+        if not self._manipulateRoundsCheck():
             return
-        
         #Create a popup dialog to select round name deletion and then delete that round
         popup = tk.Toplevel(self.mainwindow)
         popup.title("Delete Round")
@@ -444,13 +448,8 @@ class ClueGui(ClueGuiUI):
             Create a popup to select a round to move up in the list of rounds to be ran.
             Also moves the button in the UI to reflect the change.
         """
-        if self.clueRun is None:
-            self._errorPopup("No run defined", "No run defined, Please create a run first.")
+        if not self._manipulateRoundsCheck():
             return
-        if not list(self.roundsDict):
-            self._errorPopup("No Rounds", "No rounds available to move up.")
-            return
-
         # Popup window for moving the round up
         popup = tk.Toplevel(self.mainwindow)
         popup.title("Move Round Up")
@@ -508,13 +507,8 @@ class ClueGui(ClueGuiUI):
             Create a popup to select a round to move down in the list of rounds to be ran.
             Also moves the button in the UI to reflect the change.
         """
-        if self.clueRun is None:
-            self._errorPopup("No run defined", "No run defined, Please create a run first.")
+        if not self._manipulateRoundsCheck():
             return
-        if not list(self.roundsDict):
-            self._errorPopup("No Rounds", "No rounds available to move down.")
-            return
-
         # Popup window for moving the round down
         popup = tk.Toplevel(self.mainwindow)
         popup.title("Move Round Down")
@@ -569,6 +563,35 @@ class ClueGui(ClueGuiUI):
 
         tk.Button(popup, text="Move Down", command=onMoveDown).grid(row=1, column=0, padx=5, pady=10)
         tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=1, column=1, padx=5, pady=10)
+
+    @autoUpdateRounds
+    def previousRound(self):
+        """
+            Move to the previous round in the list and update the UI to reflect the change.
+        """
+        if not self._manipulateRoundsCheck():
+            return
+        try:
+            self.clueRun.previousRound()
+            self.updateActiveRoundButton()
+            Logger.log("Previous Round", f"Moved to previous round: {self.clueRun.getActiveRound().roundName if self.clueRun.getActiveRound() else 'None'}.")
+        except clueutil.ClueException as e:
+            self._errorPopup("Error Moving to Previous Round", str(e))
+
+    def _manipulateRoundsCheck(self):
+        """
+            Checks if cluerun exists, the runthread isnt active, and that there are rounds defined.
+        """
+        if self.clueRun is None:
+            self._errorPopup("No run defined", "No run defined, Please create a run first.")
+            return False
+        if self.runThread is not None and self.runThread.is_alive():
+            self._errorPopup("Run In Progress", "Cannot change rounds while a run is in progress.")
+            return False
+        if not list(self.roundsDict):
+            self._errorPopup("No Rounds", "No rounds available to manipulate.")
+            return False
+        return True
     
     @autoUpdateRounds
     def clearRounds(self):
@@ -1220,6 +1243,9 @@ class ClueGui(ClueGuiUI):
 
         menuCommandMoveRoundDown = self.builder.get_object("move_round_down_button", self.mainwindow)
         menuCommandMoveRoundDown.config(command=self.moveRoundDown)
+
+        menuCommandPreviousRound = self.builder.get_object("previous_round_button", self.mainwindow)
+        menuCommandPreviousRound.config(command=self.previousRound)
 
         self.roundsFrame = self.builder.get_object("rounds_list_frame")
 
