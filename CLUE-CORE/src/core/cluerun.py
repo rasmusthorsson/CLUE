@@ -736,12 +736,10 @@ class ClueRun:
         if (len(self.rounds) == 0):
             raise clueutil.ClueException("No rounds to run, exiting...")
         
-        Logger.log("Running round " + str(self._roundPointer + 1) + " of " + str(len(self.rounds)) + "...")
         try:
-
             # The first round runs with no previous metadata or clusters and requires setup of the run
             if (self._roundPointer == 0):
-
+                Logger.log("Running round " + str(self._roundPointer + 1) + " of " + str(len(self.rounds)) + "...")
                 self._setupRun()
 
                 currentDF = self._getInputDataframe()
@@ -764,7 +762,7 @@ class ClueRun:
             
             # Subsequent rounds use the previous round's metadata and clusters
             elif (self._roundPointer < len(self.rounds)):
-
+                Logger.log("Running round " + str(self._roundPointer + 1) + " of " + str(len(self.rounds)) + "...")
                 currRound = self.rounds[self._roundPointer]
 
                 currentDF = self._getInputDataframe()
@@ -787,8 +785,8 @@ class ClueRun:
                 currRound.runRound(self.CLUECLUST)
                 self._roundPointer += 1
             else:
-                raise clueutil.ClueException("All rounds have already been run, cannot run next round.")
-            metadataDF = pd.read_csv(self.rounds[self._roundPointer - 1].roundDirectory + "/" + self.rounds[self._roundPointer - 1]._metadataFile)
+                raise clueutil.ClueException("All rounds have already been run, please reset rounds to run again.")
+            metadataDF = pd.read_csv(self.rounds[self._roundPointer - 1].roundDirectory + "/" + self.rounds[self._roundPointer - 1]._metadataFile, index_col=False)
             if (len(metadataDF) == 0):
                 self._onClueNoiseException()
                 raise clueutil.ClueOnlyNoiseException("No data points were clustered in round " + str(self.getRoundByIndex(self._roundPointer).roundName) + ", staying at this round.")
@@ -810,7 +808,6 @@ class ClueRun:
             shutil.copy(finalRound.roundDirectory + finalRound.clustersFile, outputWriteDirectory + "/clusters_output.csv")
             Logger.log("Copying final round metadata file...")
             shutil.copy(finalRound.roundDirectory + finalRound.metadataFile, outputWriteDirectory + "/metadata_output.csv")
-            self.resetRun()
         return oldRoundPointer
 
     def runFromBeginning(self):
@@ -836,6 +833,8 @@ class ClueRun:
         Logger.logToFileOnly("runRemainder called")
         Logger.log("Resuming run of Clue from round " + str(self._roundPointer + 1) + "...\n")
         currentRound = self._roundPointer
+        if (currentRound == len(self.rounds)):
+            raise clueutil.ClueException("All rounds have already been run, please reset rounds to run again.")
         while (currentRound < len(self.rounds)):
             try:
                 currentRound = self.runNextRound()

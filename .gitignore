@@ -9,6 +9,7 @@ Demos/
 __pycache__/
 .vscode/
 *.swp
+benchmark.txt
 
 ##CLUE-CORE
 CLUE-CORE/__pycache__
@@ -53,3 +54,4 @@ CLUE-CLUST/.DS_Store
 CLUE-CLUST/Thumbs.db
 CLUE-CLUST/ehthumbs.db
 CLUE-CLUST/Desktop.ini
+PBIfilter.py

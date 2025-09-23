@@ -459,6 +459,31 @@ class ClueGraphing:
         
         ClueLogger.log("t-SNE visualization completed successfully")
 
+    def _sizeBars(clueRound, baseInputFD, baseFeaturesFD, ax):
+        """
+            Plots a bar chart of the cluster sizes.
+        """
+        ClueLogger.logToFileOnly("_sizeBars called")
+
+        #clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile, header=None)
+        metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile, index_col=False)
+
+        if (len(metadataDF) == 0):
+            raise ClueException("Metadata file is empty")
+
+        # Create a mapping from cluster ID to color, ensures that colors are consistent across graphs
+        clusterColorMap = ClueGraphing._getClusterColors(metadataDF['ClusterId'].unique())
+        barColors = [clusterColorMap[cid] for cid in metadataDF['ClusterId']]
+
+        ax.bar(metadataDF['ClusterId'].astype(str), metadataDF['Size'], color=barColors)
+        ax.set_xlabel('Cluster ID')
+        ax.set_ylabel('Size')
+        ax.set_title('Cluster Sizes')
+        ax.set_xticks(metadataDF['ClusterId'].astype(str))
+        ax.set_xticklabels(metadataDF['ClusterId'].astype(str), rotation=45)
+        ax.grid(axis='y', alpha=0.3)
+
+    @staticmethod
     def _rawBands(clueRound, baseInputFD, baseFeaturesFD, ax):
         """
             Plots the raw bands of the mean data for each cluster.
@@ -479,24 +504,28 @@ class ClueGraphing:
                                     filteredInputDF, 
                                     clustersDF)
 
+        # Use a consistent color mapping based on sorted cluster IDs
+        clusterColorMap = ClueGraphing._getClusterColors(clusterIds)
+
         # Create the plot lines
         lines = []
         for rowIndex in range(len(means)):
-
             xValues = range(len(means[rowIndex]) - 1)  # Skip the ID column
-
+            color = clusterColorMap[clusterIds[rowIndex]]
             # Plot the mean line
-            meanLine, = ax.plot(means[rowIndex][1:], label=f"Cluster {clusterIds[rowIndex]}")  # Skip the ID column
-
+            meanLine, = ax.plot(means[rowIndex][1:], label=f"Cluster {clusterIds[rowIndex]}", color=color)  # Skip the ID column
             # Plot the upper and lower bounds as a filled area
             ax.fill_between(
                 xValues,
                 lowerBounds[rowIndex][1:],      # Lower bound (skip ID column)
                 upperBounds[rowIndex][1:],      # Upper bound (skip ID column)
-                color=meanLine.get_color(),
+                color=color,
                 alpha=0.2
             )
             lines.append(meanLine)
+            
+        #Sort lines by cluster ID for consistent legend ordering
+        lines = [line for _, line in sorted(zip(clusterIds, lines), key=lambda pair: pair[0])]
 
         # Customize the x-axis
         xTicks = []
@@ -505,7 +534,6 @@ class ClueGraphing:
             if (index % 2 == 0):
                 xLabels.append("Timestep " + str(index + 1))
                 xTicks.append(index)
-        
         # Set x-ticks and labels
         ax.set_xticks(ticks=xTicks)
         ax.set_xticklabels(labels=xLabels)
@@ -524,7 +552,7 @@ class ClueGraphing:
         #Features are already calulated, just need to filter based on clusters and metadata and then calculate means
         baseFeaturesDF = pd.read_csv(baseFeaturesFD)
         clustersDF = pd.read_csv(clueRound.roundDirectory + clueRound.clustersFile, header=None)
-        metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile)
+        metadataDF = pd.read_csv(clueRound.roundDirectory + clueRound.metadataFile, index_col=False)
 
         # Filter out noise by default - TODO Allow noise to be included if desired
         filteredFeaturesDF = InputFilter.filter(baseFeaturesDF, 
@@ -532,9 +560,8 @@ class ClueGraphing:
                                                 clueRound.roundDirectory + clueRound.metadataFile, 
                                                 None, 
                                                 None)
-        
-        # Split IDs into found clusters
-        uniqueClusters = metadataDF.iloc[:, 0].unique()
+      
+        uniqueClusters = metadataDF['ClusterId'].unique()
         clusterFeaturesDict = {}
         for cluster in uniqueClusters:
             if cluster == -1:
@@ -597,6 +624,7 @@ class ClueGraphing:
     _graphDictFast = {
         "Mean Raw Data" : _rawBands,
         "Feature Profiles" : _featureProfiles,
+        "Cluster Sizes" : _sizeBars
         }
 
     _graphDictSlow = {
@@ -607,6 +635,29 @@ class ClueGraphing:
 
     def __init__(self):
         pass
+
+    graphColors = []
+
+    @staticmethod
+    def _generateClusterColors(n):
+        """
+            Generates a list of distinct colors for plotting clusters.
+            Uses matplotlib's tab10 colormap for up to 10 clusters, and extends with additional colors if needed.
+        """
+        ClueLogger.logToFileOnly("_generateClusterColors called")
+        if ClueGraphing.graphColors is None or len(ClueGraphing.graphColors) < n:
+            ClueGraphing.graphColors = plt.cm.get_cmap('tab10', n).colors
+
+    @staticmethod
+    def _getClusterColors(clusters):
+        """
+            Returns a dictionary mapping cluster IDs to colors.
+            Ensures that each unique cluster ID is assigned a distinct color.
+        """
+        ClueLogger.logToFileOnly("_getClusterColors called")
+        uniqueClusters = sorted(set(clusters))
+        ClueGraphing._generateClusterColors(len(uniqueClusters))
+        return {cid: ClueGraphing.graphColors[i] for i, cid in enumerate(uniqueClusters)}
 
     @staticmethod
     def generateGraphs(clueRound, baseInputFD, baseFeaturesFD, outputDirectory=None, directOutput=False, fastOnly=False):

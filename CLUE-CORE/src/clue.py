@@ -295,6 +295,7 @@ class ClueGui(ClueGuiUI):
                     _, currentRows = self.roundsFrame.grid_size()
                     newRoundButton.grid(row=currentRows, column=0, sticky="ew", pady=5)
                     self.roundsFrame.grid_columnconfigure(0, weight=1)
+                    self.updateActiveRoundButton()
                 else:
                     # If the name is already in the roundsDict, show an error
                     self._errorPopup("Round Exists", f"Round '{name}' already exists.")
@@ -817,8 +818,8 @@ class ClueGui(ClueGuiUI):
         if not self.clueRun.rounds:
             self._errorPopup("No Rounds", "No rounds defined in the current run. Please add rounds before running.")
             return False
-        if self.clueRun.getRoundPointer() >= len(self.clueRun.rounds):
-            self._errorPopup("All Rounds Completed", "All rounds in the current run have already been completed.")
+        if self.clueRun.getRoundPointer() > len(self.clueRun.rounds):
+            self._errorPopup("Run Error", "Round pointer exceeds number of rounds. Please reset the run or create a new one.")
             return False
         if self.runThread and self.runThread.is_alive():
             self._errorPopup("Run in Progress", "A CLUE run is already in progress. Please wait for it to complete before starting a new one.")
@@ -850,7 +851,7 @@ class ClueGui(ClueGuiUI):
                             self.clueRun.baseFeaturesFile,
                             str(self.clueRun.targetRunDirectory) + "/" + self.clueRun.outputDirectory,
                             True,
-                            fastGraphsOnly=False))
+                            fastGraphsOnly=True))
             if self.clueRun.getRoundPointer() < len(self.clueRun.rounds):
                 Logger.log("Round Complete: The current round has completed successfully. Ready for the next round.")
             else:
