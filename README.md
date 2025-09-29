@@ -50,7 +50,7 @@ ID,DIM1,DIM2,DIM3,DIM4,DIM5,DIM6,DIM7,DIM8
 1,2.5,3.5, ...
 ...
 
-it is possible to structure a features file as such:
+it is possible to structure a features selection file as such:
 
 ID,DIM1,DIM3,DIM5,DIM7
 
