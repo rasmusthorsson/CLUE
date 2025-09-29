@@ -231,8 +231,8 @@ class ClueGui(ClueGuiUI):
             hashtables = hashtablesVar.get() or currentHashtables
             kClusters = kClustersVar.get() or currentKClusters
             threads = threadsVar.get() or currentThreads
-            standardize = standardizeVar.get() or currentStandardize
-            useFeatures = useFeaturesVar.get() or currentUseFeatures
+            standardize = standardizeVar.get()
+            useFeatures = useFeaturesVar.get()
 
             # If the round does not have a button associated with it, it must be created
             if currentRoundName not in self.roundsDict.keys():

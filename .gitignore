@@ -10,6 +10,7 @@ __pycache__/
 .vscode/
 *.swp
 benchmark.txt
+.venv
 
 ##CLUE-CORE
 CLUE-CORE/__pycache__

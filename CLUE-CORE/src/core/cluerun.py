@@ -575,7 +575,8 @@ class ClueRun:
         for i in range(len(self.rounds)):
             if (self.rounds[i].roundName == roundName):
                 del self.rounds[i]
-                self.resetRun()
+                if (self._roundPointer >= i):
+                    self.resetRun()
                 return
         raise clueutil.ClueException("Round with name " + roundName + " not found, cannot remove.")
 
@@ -827,6 +828,11 @@ class ClueRun:
             shutil.copy(finalRound.roundDirectory + finalRound.clustersFile, outputWriteDirectory + "/clusters_output.csv")
             Logger.log("Copying final round metadata file...")
             shutil.copy(finalRound.roundDirectory + finalRound.metadataFile, outputWriteDirectory + "/metadata_output.csv")
+            Logger.log("Writing individual cluster files...")
+            finalClustersDF = pd.read_csv(finalRound.roundDirectory + finalRound.clustersFile, header=None)
+            for cluster_id in finalClustersDF[1].unique():
+                cluster_ids = finalClustersDF[finalClustersDF[1] == cluster_id][0]
+                cluster_ids.to_csv(f"{outputWriteDirectory}/cluster_{cluster_id}_ids.csv", header=False, index=False)
         return oldRoundPointer
 
     def runFromBeginning(self):

@@ -254,6 +254,7 @@ class InputFilter:
             Returns a filtered dataframe containing only the clusters that match the selection criteria.
         """
         ClueLogger.logToFileOnly("filterSelection called")
+        inclusionUsed = False
         filteredDF = metadataDF
         for command in commands:
             if (command[0] == "OVER"): #Over cluster size
@@ -264,7 +265,11 @@ class InputFilter:
                 filteredDF = filteredDF.loc[filteredDF["ClusterId"].isin(map(int, command[1].split(",")))]
                 inclusionUsed = True
             if (command[0] == "NOTIN"): #Direct cluster exclusion
-                filteredDF = filteredDF.drop(map(int, command[1].split(',')), errors='ignore')
+                ClueLogger.log("Excluding clusters:", command[1].split(','))
+                ClueLogger.log("ClusterId values before exclusion:", len(filteredDF['ClusterId'].unique()))
+                droppingIds = list(map(int, command[1].split(',')))
+                filteredDF = filteredDF[~filteredDF['ClusterId'].isin(droppingIds)]
+                ClueLogger.log("ClusterId values after exclusion:", filteredDF['ClusterId'].unique().tolist())
 
         # Noise has to be explicitly included, if no inclusion command was used remove noise.
         if not inclusionUsed:
@@ -315,7 +320,7 @@ class InputFilter:
         
         if (clustersFD and metadataFD):
             clustersDF = pd.read_csv(clustersFD, header=None)
-            metadataDF = pd.read_csv(metadataFD)
+            metadataDF = pd.read_csv(metadataFD, index_col=False)
             if (clustersDF.empty or metadataDF.empty):
                 ClueLogger.log("Either cluster or metadata file is empty, meaning no clusters were found in the previous round, stopping run...")
                 raise ClueException("Clusters or metadata file is empty, cannot filter input")
@@ -333,6 +338,7 @@ class InputFilter:
             else:
                 # Remove noise if no selection file is provided as noise has to be explicitly included
                 noNoiseClustersDF = clustersDF.loc[clustersDF.iloc[:, 1] != -1]
+                ClueLogger.log("No selection file provided, removing noise by default...")
                 nextInput = nextInput.loc[nextInput["ID"].isin(noNoiseClustersDF.iloc[:, 0].array)]
         elif (clustersFD and not metadataFD): #MetadataFD does not exist
             ClueLogger.log("Warning: Metadata file does not exist but clusters file does, skipping filtering...")
