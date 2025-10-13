@@ -14,7 +14,7 @@ benchmark.txt
 
 ##CLUE-CORE
 CLUE-CORE/__pycache__
-CLUE-CORE/src/core/__pycache__
+CLUE-CORE/src/core/__pycache__/*.pyc
 CLUE-CORE/src/ui/__pycache__
 
 ##CLUE-CLUST

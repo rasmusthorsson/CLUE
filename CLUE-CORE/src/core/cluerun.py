@@ -6,7 +6,6 @@ import subprocess
 from pathlib import Path
 import shutil
 import threading
-import time
 from typing import Dict, List, Optional
 
 import pandas as pd

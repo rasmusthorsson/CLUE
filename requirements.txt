@@ -1,0 +1,12 @@
+#Plot generation 
+matplotlib==3.10.7
+
+#Data manipulation
+numpy==2.3.3
+pandas==2.3.3
+
+#GUI
+pygubu==0.38.2
+
+#Advanced plotting
+scikit_learn==1.7.2
