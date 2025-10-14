@@ -14,6 +14,12 @@ pip install -r requirements.txt
 
 **CLUE** also requires JRE (Java Runtime Environment) in order to run the clustering sub-system which is implemented in Java currently.
 
+The UI can then be run with
+
+```bash
+python CLUE-CORE/src/clue.py
+```
+
 ## CLUE-CORE
 
 **CLUE** is split into two parts, the core part (**CLUE-CORE**) and the clustering part (**CLUE-CLUST**). **CLUE-CORE** manages the input pre-processing, output generation and plotting, joining of rounds, and other logic. **CLUE-CLUST** performs the clustering. Below is a figure of the core framework.
