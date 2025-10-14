@@ -1,6 +1,6 @@
 # CLUE
 
-This is a WIP proof of concept implementation of a cluster-based exploration framework (CLUE). This implementation is primarily based on the thesis found [here](https://gupea.ub.gu.se/handle/2077/89783).
+This is a WIP proof of concept implementation of a cluster-based exploration framework (**CLUE**). This implementation is primarily based on the thesis found [here](https://gupea.ub.gu.se/handle/2077/89783).
 
 ## Installation
 
@@ -12,11 +12,11 @@ cd CLUE
 python install -r requirements.txt
 ```
 
-CLUE also requires JRE (Java Runtime Environment) in order to run the clustering sub-system which is implemented in Java currently.
+**CLUE** also requires JRE (Java Runtime Environment) in order to run the clustering sub-system which is implemented in Java currently.
 
 ## CLUE-CORE
 
-CLUE is split into two parts, the core part and the clustering part. The core part manages the input pre-processing, output generation and plotting, joining of rounds, and other logic. Below is a figure of the core framework.
+**CLUE** is split into two parts, the core part (**CLUE-CORE**) and the clustering part (**CLUE-CLUST**). **CLUE-CORE** manages the input pre-processing, output generation and plotting, joining of rounds, and other logic. **CLUE-CLUST** performs the clustering. Below is a figure of the core framework.
 
 ![CLUE](assets/clue.png)
 
@@ -38,7 +38,7 @@ Feature selection allows dimension/feature selection, depending on whether the r
 
 #### Cluster Selection
 
-Cluster selection allows filtering of clusters from the previous round in order to aid exploration efforts. For example if the first round results in two clusters, the second round can select to only use data points from one of the clusters as input. This is done by adding a file detailing which clusters to use. Here is an example showing the available formats, each format is optional.
+Cluster selection allows filtering of clusters from the previous round in order to aid exploration efforts. For example if the first round results in two clusters, the second round can select to only use data points from one of the clusters as input. This is done by adding a file detailing which clusters to use. Here is an example sh**owing the available formats, each format is optional.
 
 ```
 IN:1,5,6 
@@ -51,10 +51,19 @@ The first row specifies that only clusters 1, 5, and 6 are to be considered. The
 
 #### Round Options
 
-Furthermore, each round is associated with a set of options, these options range from clustering parameters to which clustering algorithm to use. Most of these options are directly forwarded to the CLUE-CLUST subsystem and can be found in the CLUE-CLUST section below. Here is a list of available options not related to CLUE-CLUST:
+Furthermore, each round is associated with a set of options, these options range from clustering parameters to which clustering algorithm to use. Most of these options are directly forwarded to the **CLUE-CLUST**.
 
-- Use Features (Cluster on the features base file instead of the raw data)
-- Standardize (Standardizes the data, primarily used in combination with Use Features to avoid one or two features dominating the clustering)
+- `Use Features` (Cluster on the features base file instead of the raw data)
+- `Standardize` (Standardizes the data, primarily used in combination with Use Features to avoid one or two features dominating the clustering)
+- `Algorithm Selection`:  DBSCAN, IP.LSH.DBSCAN, K-Means
+- `Distance Metrics`: Euclidean, Angular, DTW
+- `Parameter Exploration`: None, K-Distance, Grid Search
+- `Epsilon` (Parameter for DBSCAN and IP.LSH.DBSCAN)
+- `MinPts` (Parameter for DBSCAN and IP.LSH.DBSCAN)
+- `Hyperplanes` (Parameter for IP.LSH.DBSCAN)
+- `Hashtables` (Parameter for IP.LSH.DBSCAN)
+- `KClusters` (Parameter for K-Means)
+- `Threads` (Numbers of threads to use when possible)
 
 ### Analysis Stage
 
@@ -62,15 +71,4 @@ When the final round has completed, the final plots and graphs are generated, th
 
 ## CLUE-CLUST
 
-CLUE-CLUST manages individual clustering of rounds and is managed as a .jar file. It can be used separately if desired, but for this project it is used as the clustering subsystem for each round. In this project the options are selected through the CLUE-CORE subsystem. The available options are:
-
-- Algorithm Selection: DBSCAN, IP.LSH.DBSCAN, K-Means
-- Distance Metrics: Euclidean, Angular, DTW
-- Parameter Exploration Levels: None, K-Distance, Grid Search
-- Epsilon (Parameter for DBSCAN and IP.LSH.DBSCAN)
-- MinPts (Parameter for DBSCAN and IP.LSH.DBSCAN)
-- Hyperplanes (Parameter for IP.LSH.DBSCAN)
-- Hashtables (Parameter for IP.LSH.DBSCAN)
-- KClusters (Parameter for K-Means)
-- Threads (Numbers of threads to use when possible)
-
+**CLUE-CLUST** manages individual clustering of rounds and is managed as a .jar file. It can be used separately if desired, but for this project it is used as the clustering subsystem for each round. **CLUE-CLUST**.
