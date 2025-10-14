@@ -56,3 +56,5 @@ CLUE-CLUST/Thumbs.db
 CLUE-CLUST/ehthumbs.db
 CLUE-CLUST/Desktop.ini
 PBIfilter.py
+CLUE-CORE/src/core/__pycache__/cluerun.cpython-312.pyc
+CLUE-CORE/src/core/__pycache__/clueutil.cpython-312.pyc
