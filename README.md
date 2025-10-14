@@ -9,7 +9,7 @@ To run this, clone the github repo and install the requirements.
 ```bash
 git clone https://github.com/rasmusthorsson/CLUE
 cd CLUE
-python install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 **CLUE** also requires JRE (Java Runtime Environment) in order to run the clustering sub-system which is implemented in Java currently.
