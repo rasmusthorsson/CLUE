@@ -1,3 +1,4 @@
+import os
 import xml.etree.ElementTree as ET
 from core.cluerun import ClueRun, ClueRound, ClueConfig
 
@@ -34,9 +35,21 @@ def clueconfig_from_xml(elem):
 def clueround_to_xml(round_obj):
     elem = ET.Element("ClueRound")
     ET.SubElement(elem, "roundName").text = str(round_obj.roundName)
-    ET.SubElement(elem, "directory").text = str(round_obj.directory)
-    ET.SubElement(elem, "featureSelectionFile").text = str(round_obj.featureSelectionFile)
-    ET.SubElement(elem, "clusterSelectionFile").text = str(round_obj.clusterSelectionFile)
+    try:
+        directory = os.path.relpath(round_obj.directory)
+        ET.SubElement(elem, "directory").text = directory
+    except ValueError:
+        ET.SubElement(elem, "directory").text = str(round_obj.directory)
+    try: 
+        featureSelectionFile = os.path.relpath(round_obj.featureSelectionFile)
+        ET.SubElement(elem, "featureSelectionFile").text = featureSelectionFile
+    except ValueError:
+        ET.SubElement(elem, "featureSelectionFile").text = str(round_obj.featureSelectionFile)
+    try: 
+        clusterSelectionFile = os.path.relpath(round_obj.clusterSelectionFile)
+        ET.SubElement(elem, "clusterSelectionFile").text = clusterSelectionFile
+    except ValueError:
+        ET.SubElement(elem, "clusterSelectionFile").text = str(round_obj.clusterSelectionFile)
     elem.append(clueconfig_to_xml(round_obj.clueConfig))
     return elem
 
@@ -52,11 +65,19 @@ def clueround_from_xml(elem):
 def cluerun_to_xml(run_obj):
     elem = ET.Element("ClueRun")
     ET.SubElement(elem, "runName").text = str(run_obj.runName)
-    ET.SubElement(elem, "baseFile").text = str(run_obj.baseFile)
-    ET.SubElement(elem, "baseDirectory").text = str(run_obj.baseDirectory)
+    try:
+        baseFileRP = os.path.relpath(run_obj.baseFile)
+        ET.SubElement(elem, "baseFile").text = baseFileRP
+        baseDirectoryRP = os.path.relpath(run_obj.baseDirectory)
+        ET.SubElement(elem, "baseDirectory").text = baseDirectoryRP
+        CLUECLUSTRP = os.path.relpath(run_obj.CLUECLUST)
+        ET.SubElement(elem, "CLUECLUST").text = CLUECLUSTRP
+    except ValueError:
+        ET.SubElement(elem, "baseFile").text = str(run_obj.baseFile)
+        ET.SubElement(elem, "CLUECLUST").text = str(run_obj.CLUECLUST)
+        ET.SubElement(elem, "baseDirectory").text = str(run_obj.baseDirectory)
     ET.SubElement(elem, "outputDirectory").text = str(run_obj.outputDirectory)
     ET.SubElement(elem, "interactive").text = str(run_obj.interactive)
-    ET.SubElement(elem, "CLUECLUST").text = str(run_obj.CLUECLUST)
     rounds_elem = ET.SubElement(elem, "Rounds")
     for round_obj in run_obj.rounds:
         rounds_elem.append(clueround_to_xml(round_obj))

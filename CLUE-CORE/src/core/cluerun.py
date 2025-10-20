@@ -214,10 +214,16 @@ class ClueRound:
         """
         Logger.logToFileOnly("setRound called")
         self.roundName = roundName
-        self.directory = directory
-        self._roundDirectory = str(directory) + "/" + roundName + "/"
-        self.featureSelectionFile = featureSelectionFile or ""
-        self.clusterSelectionFile = clusterSelectionFile or ""
+        self.directory = str(Path(directory).resolve())
+        self._roundDirectory = self.directory + "/" + roundName + "/"
+        if featureSelectionFile:
+            self.featureSelectionFile = str(Path(featureSelectionFile).resolve())
+        else:
+            self.featureSelectionFile = ""
+        if clusterSelectionFile:
+            self.clusterSelectionFile = str(Path(clusterSelectionFile).resolve())
+        else:
+            self.clusterSelectionFile = ""
         self.clueConfig = clueConfig
 
         #TODO Fix inconsistency in managing file descriptors
@@ -248,8 +254,8 @@ class ClueRound:
             Updates the required round variables when a new directory is set.
         """
         Logger.logToFileOnly("updateDirectory called")
-        self.directory = directory
-        self._roundDirectory = str(directory) + "/" + self.roundName + "/"
+        self.directory = str(Path(directory).resolve())
+        self._roundDirectory = self.directory + "/" + self.roundName + "/"
         self._inputFile = self._roundDirectory + "input.csv"
 
     def _buildCall(self, CLUECLUST):
@@ -485,15 +491,17 @@ class ClueRun:
         # Attributes
         self.rounds: List[ClueRound] = []                    # Rounds to run
         self.runName: str = runName                          # Name of run
-        self.baseFile: str = baseFile                        # Base input file, raw data
-        self.baseDirectory: str = baseDirectory              # Base directory
+        self.baseFile: str = baseFile
+        self.baseDirectory: str = baseDirectory
+        self._targetRunDirectory: str = baseDirectory + "/" + runName + "/"  # Target run directory
+        self.updateBaseFile(baseFile)                                        # Base input file, raw data
+        self.updateBaseDirectory(baseDirectory)                              # Base directory
         self.outputDirectory: str = outputDirectory          # Output directory for final results
         self.interactive: bool = interactive                 # Display graphs directly vs save to file
-        self.CLUECLUST: str = CLUECLUST                      # Path to CLUECLUST jar file
+        self.setCLUECLUSTPath(CLUECLUST)
 
         # Properties
         self._baseFeaturesFile: Optional[str] = None                        # Features file (created in run directory)
-        self._targetRunDirectory = self.baseDirectory + "/" + self.runName  # Run directory
         self._roundPointer: int = 0                                         # Pointer to current round being run
         
         # Cache attributes
@@ -514,7 +522,8 @@ class ClueRun:
             Sets the path to the CLUECLUST jar file.
         """
         Logger.logToFileOnly("setCLUECLUSTPath called")
-        self.CLUECLUST = path or self.DEFAULT_JAR_PATH
+        CLUECLUSTRP = str(Path(path).resolve())
+        self.CLUECLUST = CLUECLUSTRP or self.DEFAULT_JAR_PATH
 
     def buildRound(self, roundName, featuresFile, selectionFile, clueConfig):
         """
@@ -614,8 +623,8 @@ class ClueRun:
         if baseFile == self.baseFile:
             return
         self.resetRun()
-        self.baseFile = baseFile
-
+        self.baseFile = str(Path(baseFile).resolve())
+        
     def updateBaseDirectory(self, baseDirectory):
         """
             Updates the related variables when a new baseDirectory is set.
@@ -624,7 +633,7 @@ class ClueRun:
         if baseDirectory == self.baseDirectory:
             return
         self.resetRun()
-        self.baseDirectory = baseDirectory
+        self.baseDirectory = str(Path(baseDirectory).resolve())
         self._targetRunDirectory = self.baseDirectory + "/" + self.runName
         for round in self.rounds:
             round.updateDirectory(self._targetRunDirectory)

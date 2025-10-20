@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import os
 import pathlib
 import threading
 
@@ -1125,7 +1126,7 @@ class ClueGui(ClueGuiUI):
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
         )
         if filePath:
-            self.clueRun.baseFile = str(filePath)
+            self.clueRun.updateBaseFile(str(os.path.relpath(filePath)))
             self.builder.get_object("input_file_entry", self.mainwindow).delete(0, tk.END)
             self.builder.get_object("input_file_entry", self.mainwindow).insert(0, filePath)
 
