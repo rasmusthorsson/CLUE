@@ -13,8 +13,6 @@ import pandas as pd
 from core import clueutil
 from core.clueutil import ClueCancellation, ClueLogger as Logger
 
-#TODO Fix bug where one line is lost every clue round
-
 #--------------------------- Settings ------------------------------------
 class Algorithm(IntEnum):
     DBSCAN = 1
@@ -477,9 +475,12 @@ class ClueRun:
         roundPointer: Index of the current round being run
     """
     
+    DEFAULT_JAR_PATH = "CLUE-CORE/src/external/CLUECLUST.jar"
+
+
     def __init__(self, runName: str, baseFile: str, baseDirectory: str, 
                  outputDirectory: str = "output", interactive: bool = False, 
-                 CLUECLUST: str = "CLUECLUST.jar"):
+                 CLUECLUST: str = DEFAULT_JAR_PATH):
 
         # Attributes
         self.rounds: List[ClueRound] = []                    # Rounds to run
@@ -507,6 +508,13 @@ class ClueRun:
     @property
     def targetRunDirectory(self) -> str:
         return self._targetRunDirectory
+    
+    def setCLUECLUSTPath(self, path: str):
+        """
+            Sets the path to the CLUECLUST jar file.
+        """
+        Logger.logToFileOnly("setCLUECLUSTPath called")
+        self.CLUECLUST = path or self.DEFAULT_JAR_PATH
 
     def buildRound(self, roundName, featuresFile, selectionFile, clueConfig):
         """

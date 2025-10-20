@@ -715,8 +715,7 @@ class ClueGui(ClueGuiUI):
         self.builder.get_object("input_file_entry", self.mainwindow).insert(0, str(self.clueRun.baseFile))
         self.builder.get_object("directory_entry", self.mainwindow).delete(0, tk.END)
         self.builder.get_object("directory_entry", self.mainwindow).insert(0, str(self.clueRun.baseDirectory))
-        self.builder.get_object("clueclust_entry", self.mainwindow).delete(0, tk.END)
-        self.builder.get_object("clueclust_entry", self.mainwindow).insert(0, str(self.clueRun.CLUECLUST))
+        self.clueclustLocation = self.clueRun.CLUECLUST
         for round in self.clueRun.rounds:
             self.addExistingRound(round.roundName)
 
@@ -965,15 +964,14 @@ class ClueGui(ClueGuiUI):
         #Set global run settings before run
         inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
         outputDirectory = self.builder.get_object("directory_entry", self.mainwindow).get()
-        clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
 
-        if not inputFile or not outputDirectory or not clueclustLocation:
+        if not inputFile or not outputDirectory:
             self._errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
             return
         else:
             self.clueRun.updateBaseFile(str(inputFile))
             self.clueRun.updateBaseDirectory(str(outputDirectory))
-            self.clueRun.CLUECLUST = str(clueclustLocation)
+            self.clueRun.setCLUECLUSTPath(str(self.clueclustLocation))
 
             self.startRunningIndicator(self.buttonRunNext)  # Start the running indicator on the button
             ClueCancellation.clearCancellation()            # Clear any previous cancellation requests
@@ -991,15 +989,14 @@ class ClueGui(ClueGuiUI):
         #Set global run settings before run
         inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
         outputDirectory = self.builder.get_object("directory_entry", self.mainwindow).get()
-        clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
 
-        if not inputFile or not outputDirectory or not clueclustLocation:
+        if not inputFile or not outputDirectory:
             self._errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
             return
         else:
             self.clueRun.updateBaseFile(str(inputFile))
             self.clueRun.updateBaseDirectory(str(outputDirectory))
-            self.clueRun.CLUECLUST = str(clueclustLocation)
+            self.clueRun.setCLUECLUSTPath(str(self.clueclustLocation))
 
             self.startRunningIndicator(self.buttonRunRest)  # Start the running indicator on the button
             ClueCancellation.clearCancellation()            # Clear any previous cancellation requests
@@ -1017,15 +1014,14 @@ class ClueGui(ClueGuiUI):
         #Set global run settings before run
         inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
         outputDirectory = self.builder.get_object("directory_entry", self.mainwindow).get()
-        clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
 
-        if not inputFile or not outputDirectory or not clueclustLocation:
+        if not inputFile or not outputDirectory:
             self._errorPopup("Missing Information", "Please ensure all fields are filled out before running CLUE.")
             return
         else:
             self.clueRun.updateBaseFile(str(inputFile))
             self.clueRun.updateBaseDirectory(str(outputDirectory))
-            self.clueRun.CLUECLUST = str(clueclustLocation)
+            self.clueRun.setCLUECLUSTPath(str(self.clueclustLocation))
 
             self.startRunningIndicator(self.buttonRunClue)  # Start the running indicator on the button
             ClueCancellation.clearCancellation()            # Clear any previous cancellation requests
@@ -1146,19 +1142,42 @@ class ClueGui(ClueGuiUI):
             self.builder.get_object("directory_entry", self.mainwindow).delete(0, tk.END)
             self.builder.get_object("directory_entry", self.mainwindow).insert(0, str(directoryPath))
 
-    def selectClueclustLocation(self):
+    def advancedSettingsPopup(self):
         """
-            Select the location of the Clueclust jar file.
+            Create a popup to adjust advanced CLUE settings.
         """
-        filePath = filedialog.askopenfilename(
-            parent=self.mainwindow,
-            title="Select Clueclust Jar",
-            filetypes=[("Jar files", "*.jar"), ("All files", "*.*")]
+        
+        # Create the popup window
+        popup = tk.Toplevel(self.mainwindow)
+        popup.title("Advanced Settings")
+        popup.grab_set()
+        popup.focus_force()
+        popup.columnconfigure(0, weight=1)
+        popup.rowconfigure(0, weight=1)
+
+        settingsFrame = tk.Frame(popup, padx=10, pady=10)
+        settingsFrame.grid(row=0, column=0, padx=10, pady=5, stick="nsew")
+
+        tk.Label(settingsFrame, text="Clueclust Location:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        clueclustEntry = tk.Entry(settingsFrame)
+        clueclustEntry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        clueclustEntry.insert(0, self.clueclustLocation if self.clueclustLocation else "")
+        clueclustButton = tk.Button(
+            settingsFrame,
+            text="Change CLUECLUST Location",
+            command=lambda: self._chooseFile(clueclustEntry, popup, type=("Jar files", "*.jar"))
         )
-        if filePath:
-            self.clueRun.CLUECLUST = str(filePath)
-            self.builder.get_object("clueclust_entry", self.mainwindow).delete(0, tk.END)
-            self.builder.get_object("clueclust_entry", self.mainwindow).insert(0, filePath)
+        clueclustButton.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+
+        def onOk():
+            """
+                Apply the advanced settings from the popup.
+            """
+            self.clueclustLocation = str(clueclustEntry.get()) or None
+            popup.destroy()
+
+        tk.Button(popup, text="OK", command=onOk).grid(row=2, column=0, padx=5, pady=10)
+        tk.Button(popup, text="Cancel", command=popup.destroy).grid(row=2, column=1, padx=5, pady=10)
 
     def logSettingsPopup(self):
         """
@@ -1227,6 +1246,7 @@ class ClueGui(ClueGuiUI):
         self.runThread = None
         self.clueRun = None
         self.roundCount = 0
+        self.clueclustLocation = None
         self.builder.add_from_file(clueuiui.PROJECT_UI)
         self.runningButton = None
 
@@ -1276,9 +1296,6 @@ class ClueGui(ClueGuiUI):
 
         buttonChangeDirectory = self.builder.get_object("change_directory_button", self.mainwindow)
         buttonChangeDirectory.config(command=self.selectOutputDirectory)
-
-        buttonChangeClueclust = self.builder.get_object("clueclust_button", self.mainwindow)
-        buttonChangeClueclust.config(command=self.selectClueclustLocation)
 
         self.textBox = self.builder.get_object("output_text", self.mainwindow)
 
