@@ -68,14 +68,18 @@ def cluerun_to_xml(run_obj):
     try:
         baseFileRP = os.path.relpath(run_obj.baseFile)
         ET.SubElement(elem, "baseFile").text = baseFileRP
+    except ValueError:
+        ET.SubElement(elem, "baseFile").text = str(run_obj.baseFile)
+    try:
         baseDirectoryRP = os.path.relpath(run_obj.baseDirectory)
         ET.SubElement(elem, "baseDirectory").text = baseDirectoryRP
+    except ValueError:
+        ET.SubElement(elem, "baseDirectory").text = str(run_obj.baseDirectory)
+    try:
         CLUECLUSTRP = os.path.relpath(run_obj.CLUECLUST)
         ET.SubElement(elem, "CLUECLUST").text = CLUECLUSTRP
     except ValueError:
-        ET.SubElement(elem, "baseFile").text = str(run_obj.baseFile)
         ET.SubElement(elem, "CLUECLUST").text = str(run_obj.CLUECLUST)
-        ET.SubElement(elem, "baseDirectory").text = str(run_obj.baseDirectory)
     ET.SubElement(elem, "outputDirectory").text = str(run_obj.outputDirectory)
     ET.SubElement(elem, "interactive").text = str(run_obj.interactive)
     rounds_elem = ET.SubElement(elem, "Rounds")

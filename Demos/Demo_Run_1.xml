@@ -1,0 +1,49 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ClueRun>
+  <runName>Demo_Run_1</runName>
+  <baseFile>input.csv</baseFile>
+  <baseDirectory>Demos</baseDirectory>
+  <CLUECLUST>CLUE-CORE/src/external/CLUECLUST.jar</CLUECLUST>
+  <outputDirectory>output</outputDirectory>
+  <interactive>False</interactive>
+  <Rounds>
+    <ClueRound>
+      <roundName>KMeans_1</roundName>
+      <directory>Demos/Demo_Run_1</directory>
+      <featureSelectionFile />
+      <clusterSelectionFile />
+      <ClueConfig>
+        <algorithm>3</algorithm>
+        <distanceMetric>1</distanceMetric>
+        <paramOptimization>0</paramOptimization>
+        <epsilon>1.0</epsilon>
+        <minPts>5</minPts>
+        <hyperplanes>5</hyperplanes>
+        <hashtables>5</hashtables>
+        <kClusters>5</kClusters>
+        <threads>1</threads>
+        <standardize>False</standardize>
+        <useFeatures>False</useFeatures>
+        </ClueConfig>
+      </ClueRound>
+    <ClueRound>
+      <roundName>DBSCAN_1</roundName>
+      <directory>Demos/Demo_Run_1</directory>
+      <featureSelectionFile />
+      <clusterSelectionFile>Demo/demo_1_selection.csv</clusterSelectionFile>
+      <ClueConfig>
+        <algorithm>1</algorithm>
+        <distanceMetric>2</distanceMetric>
+        <paramOptimization>0</paramOptimization>
+        <epsilon>0.035</epsilon>
+        <minPts>20</minPts>
+        <hyperplanes>5</hyperplanes>
+        <hashtables>5</hashtables>
+        <kClusters>5</kClusters>
+        <threads>1</threads>
+        <standardize>False</standardize>
+        <useFeatures>False</useFeatures>
+        </ClueConfig>
+      </ClueRound>
+    </Rounds>
+  </ClueRun>

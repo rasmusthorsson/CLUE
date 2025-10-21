@@ -3,7 +3,7 @@
 #Testfiles/Demos
 testfiles/
 Demo/
-Demos/
+Demos/Demo_Run_1
 
 #Python cache files
 *.pyc
@@ -21,7 +21,6 @@ CLUE-CORE/src/ui/__pycache__
 CLUE-CORE/.ipynb_checkpoints/
 
 ##CLUE-CLUST
-
 benchmark.txt
 
 # Ignore compiled files in the src directory
