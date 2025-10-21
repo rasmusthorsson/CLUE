@@ -14,10 +14,10 @@ pip install -r requirements.txt
 
 **CLUE** also requires JRE (Java Runtime Environment) in order to run the clustering sub-system which is implemented in Java currently.
 
-The UI can then be run with
+CLUE (UI) can then be run with:
 
 ```bash
-python CLUE-CORE/src/clue.py
+python clue.py
 ```
 
 ## CLUE-CORE

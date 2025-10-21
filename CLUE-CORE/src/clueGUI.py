@@ -575,7 +575,11 @@ class ClueGui(ClueGuiUI):
         try:
             self.clueRun.previousRound()
             self.updateActiveRoundButton()
-            Logger.log("Previous Round", f"Moved to previous round: {self.clueRun.getActiveRound().roundName if self.clueRun.getActiveRound() else 'None'}.")
+            if not self.clueRun.getActiveRound() or self.clueRun.getRoundIndex(self.clueRun.getActiveRound().roundName) == 0:
+                self._clearPlots()
+            else:
+                self.showGraphs(self.clueRun.getRoundByIndex(self.clueRun.getRoundIndex(self.clueRun.getActiveRound().roundName) - 1))
+            Logger.log(f"Moved to previous round: {self.clueRun.getActiveRound().roundName if self.clueRun.getActiveRound() != None else 'None'}.")
         except clueutil.ClueException as e:
             self._errorPopup("Error Moving to Previous Round", str(e))
 
@@ -602,6 +606,7 @@ class ClueGui(ClueGuiUI):
         for _, button in self.roundsDict.items():
             button.destroy()
         self.roundsDict.clear()
+        clueutil.ClueGraphing.clearGraphs()
         self.roundCount = 0
 
     def changeRunNameLabel(self, newName):
@@ -720,6 +725,14 @@ class ClueGui(ClueGuiUI):
         for round in self.clueRun.rounds:
             self.addExistingRound(round.roundName)
 
+    def _clearPlots(self):
+        """
+            Clear all plots from the UI.
+        """
+        for tab in self.plotNotebook.tabs():
+            self.plotNotebook.forget(tab)
+        self.plotNotebook.update()
+
     def createPlotTab(self, notebook, fig, name):
         """
             Create a tab in the notebook for displaying plots.
@@ -759,10 +772,17 @@ class ClueGui(ClueGuiUI):
         roundName = round.roundName if round is not None else "None"
         self.builder.get_object("round_graph_name", self.mainwindow).config(text=roundName)
 
+        self.showGraphs(round)
+
+    def showGraphs(self, round):
+        """
+            Show the graphs for the given round in the UI.
+        """
+        graphs = clueutil.ClueGraphing.getRoundGraphs(round.roundName)
+        Logger.log("Showing Graphs for Round: ", round.roundName if round is not None else "None")
         for tab in self.plotNotebook.tabs():
             self.plotNotebook.forget(tab)
-
-        for name, graph in clueutil.ClueGraphing.graphs.items():
+        for name, graph in graphs.items():
             fig = graph
             if fig is not None:
                 # Create a new tab in the notebook for each figure
@@ -873,7 +893,7 @@ class ClueGui(ClueGuiUI):
                             self.clueRun.baseFile,
                             self.clueRun.baseFeaturesFile,
                             str(self.clueRun.targetRunDirectory) + "/" + self.clueRun.outputDirectory,
-                            True,
+                            False,
                             fastGraphsOnly=True))
             if self.clueRun.getRoundPointer() < len(self.clueRun.rounds):
                 Logger.log("Round Complete: The current round has completed successfully. Ready for the next round.")

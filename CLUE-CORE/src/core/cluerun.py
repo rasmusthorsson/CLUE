@@ -611,8 +611,6 @@ class ClueRun:
             Returns the currently active round, or None if at the beginning before any rounds have been run.
         """
         Logger.logToFileOnly("getActiveRound called")
-        if (self._roundPointer == 0):
-            return None
         return self.rounds[self._roundPointer]
 
     def updateBaseFile(self, baseFile):

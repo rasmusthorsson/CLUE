@@ -665,6 +665,23 @@ class ClueGraphing:
         ClueGraphing._generateClusterColors(len(uniqueClusters))
         return {cid: ClueGraphing.graphColors[i] for i, cid in enumerate(uniqueClusters)}
 
+    def clearGraphs():
+        """
+            Clears all stored graphs.
+        """
+        ClueLogger.logToFileOnly("clearGraphs called")
+        ClueGraphing.graphs = {}
+
+    def getRoundGraphs(roundName):
+        """
+            Returns the graphs for a specific round.
+        """
+        ClueLogger.logToFileOnly("getRoundGraphs called")
+        if roundName in ClueGraphing.graphs:
+            return ClueGraphing.graphs[roundName]
+        else:
+            return None
+
     @staticmethod
     def generateGraphs(clueRound, baseInputFD, baseFeaturesFD, outputDirectory=None, directOutput=False, fastOnly=False):
         """
@@ -679,15 +696,21 @@ class ClueGraphing:
             raise ClueException("In order to generate graphs, please select an outputDirectory or set directOutput to True")
         if (directOutput):
             plt.ioff()
+            ClueLogger.log("Direct output enabled, displaying graphs interactively...")
         if (fastOnly):
             ClueGraphing._graphDict = ClueGraphing._graphDictFast
         else:
             ClueGraphing._graphDict = {**ClueGraphing._graphDictFast, **ClueGraphing._graphDictSlow}
+        roundGraphs = {}
         for graphIndex, graphFunction in enumerate(ClueGraphing._graphDict.values()):
             fig, ax = plt.subplots(constrained_layout=True)
             graphFunction(clueRound, baseInputFD, baseFeaturesFD, ax)
-            ClueGraphing.graphs[list(ClueGraphing._graphDict.keys())[graphIndex]] = fig
-            if (outputDirectory):
+            roundGraphs[list(ClueGraphing._graphDict.keys())[graphIndex]] = fig
+            if (outputDirectory and not directOutput):
                 plt.savefig(outputDirectory + "/" + list(ClueGraphing._graphDict.keys())[graphIndex] + ".png")
             else:
                 ClueLogger.log("No output directory specified, skipping saving of graph " + list(ClueGraphing._graphDict.keys())[graphIndex])
+        if len(ClueGraphing.graphs) < 16:
+            ClueGraphing.graphs[clueRound.roundName] = roundGraphs
+        else: 
+            ClueLogger.log("Maximum number of stored graphs reached, not storing graphs for round " + clueRound.roundName)
