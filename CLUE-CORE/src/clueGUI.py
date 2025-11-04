@@ -66,6 +66,7 @@ class ClueGui(ClueGuiUI):
             entryWidget.delete(0, tk.END)
             entryWidget.insert(0, filePath)
 
+    #TODO Refactor this function to reduce complexity
     def buildRoundPopup(self, 
                    currentAlgorithm=0, 
                    currentMetric=0, 
@@ -78,8 +79,8 @@ class ClueGui(ClueGuiUI):
                    currentThreads=1,
                    currentStandardize=False,
                    currentUseFeatures=False,
-                   currentFeaturesFile="",
-                   currentSelectionFile="",
+                   currentFeatures=None,
+                   currentSelection=None,
                    currentRoundName="",
                    ):
         """
@@ -188,30 +189,48 @@ class ClueGui(ClueGuiUI):
         tk.Label(roundSettings, text="Round Name:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
         roundnameVar = tk.StringVar(roundSettings, value=currentRoundName)
         tk.Entry(roundSettings, textvariable=roundnameVar).grid(row=0, column=1, padx=5, pady=5)
-    
-        # Features file selection
-        tk.Label(roundSettings, text="Features File:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
-        featuresFileEntry = tk.Entry(roundSettings)
-        featuresFileEntry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        featuresFileEntry.insert(0, currentFeaturesFile) 
-        featuresFileButton = tk.Button(
-            roundSettings,
-            text="Browse",
-            command=lambda: self._chooseFile(featuresFileEntry, popup)
-        )
-        featuresFileButton.grid(row=1, column=2, padx=5, pady=5, sticky="ew")
 
-        # Cluster selection file selection
-        tk.Label(roundSettings, text="Selection File:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
-        selectionFileEntry = tk.Entry(roundSettings)
-        selectionFileEntry.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-        selectionFileEntry.insert(0, currentSelectionFile)
-        selectionFileButton = tk.Button(
-            roundSettings,
-            text="Browse",
-            command=lambda: self._chooseFile(selectionFileEntry, popup)
-        )
-        selectionFileButton.grid(row=2, column=2, padx=5, pady=5, sticky="ew")
+        #Current Features selection
+        featuresFrame = tk.LabelFrame(roundSettings, text="Features")
+        featuresFrame.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
+        featuresEntry = tk.Entry(featuresFrame)
+        featuresEntry.grid(row=1, column=1, padx=5, pady=5)
+        if currentFeatures is not None:
+            for fi in range(len(currentFeatures)):
+                featuresEntry.insert(tk.END, currentFeatures[fi])
+                if fi != len(currentFeatures) - 1:
+                    featuresEntry.insert(tk.END, ",")
+
+        selectionFrame = tk.LabelFrame(roundSettings, text="Cluster Selection")
+        selectionFrame.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
+        row = 0
+
+        def buildEntry(parent, value, type):
+            widget = None
+            if type == int:
+                #TODO Allow for empty values to be represented as an empty string.
+                widget = tk.Spinbox(parent, from_=0, to=1000000, increment=1)
+                if value is not None and value != "":
+                    widget.delete(0, tk.END)
+                    widget.insert(0, str(value))
+                else:
+                    widget.delete(0, tk.END)
+            elif type == list:
+                widget = tk.Entry(parent, textvariable=tk.StringVar(value=",".join(map(str, value))))
+            return widget
+
+        for command, struct in clueutil.InputFilter.commandsDict.items():
+            tk.Label(selectionFrame, text=command).grid(row=row, column=0, padx=5, pady=5, sticky="e")
+            try: 
+                if not currentSelection:
+                    buildEntry(selectionFrame, "", struct["type"]).grid(row=row, column=1, padx=5, pady=5)
+                elif currentSelection[command]:
+                    buildEntry(selectionFrame, currentSelection[command], struct["type"]).grid(row=row, column=1, padx=5, pady=5)
+                else:
+                    buildEntry(selectionFrame, "", struct["type"]).grid(row=row, column=1, padx=5, pady=5)
+            except (KeyError):
+                buildEntry(selectionFrame, "", struct["type"]).grid(row=row, column=1, padx=5, pady=5)
+            row += 1
 
         # Callback when user clicks "OK", reads values from the UI and creates/updates the round
         def onOk():
@@ -219,10 +238,40 @@ class ClueGui(ClueGuiUI):
                 Callback when user clicks "OK", reads values from the UI and creates/updates the round.
             """
 
+            def readFeatures():
+                features = featuresEntry.get().split(",")
+                return [f.strip() for f in features if f.strip()]
+            
+            def readSelection():
+                selection = {}
+                for child in selectionFrame.winfo_children():
+                    if isinstance(child, tk.Entry):
+                        row = child.grid_info()['row']
+                        key = selectionFrame.grid_slaves(row=row, column=0)[0].cget("text")
+                        value = child.get().split(",")
+                        selection[key] = []
+                        for v in value:
+                            if v.strip() == "":
+                                continue
+                            try:
+                                vi = int(v)
+                                selection[key].append(vi)
+                            except ValueError:
+                                Logger.log(f"Non-integer value '{v}' found in selection for key '{key}', ignoring this value.")
+                    elif isinstance(child, tk.Spinbox):
+                        row = child.grid_info()['row']
+                        key = selectionFrame.grid_slaves(row=row, column=0)[0].cget("text")
+                        value = child.get()
+                        try:
+                            selection[key] = int(value)
+                        except ValueError:
+                            selection[key] = None
+                return selection
+
             # Grab values from the UI elements
             name = roundnameVar.get() or f"Round {self.roundCount + 1}"
-            featureFile = str(featuresFileEntry.get()) or ""
-            selectionFile = str(selectionFileEntry.get()) or ""
+            features = readFeatures()
+            selection = readSelection()
             algorithm = cluerun.Algorithm(chosenAlgorithm.current() + 1) or cluerun.Algorithm(currentAlgorithm)
             distanceMetric = cluerun.DistanceMetric(chosenMetric.current() + 1) or cluerun.DistanceMetric(currentMetric)
             paramOptimization = cluerun.ParameterOptimizationLevel(paramOptLevel.current())
@@ -241,8 +290,8 @@ class ClueGui(ClueGuiUI):
                     # If the round does not already exist, create it
                     self.clueRun.buildRound(
                         name,
-                        featureFile,
-                        selectionFile,
+                        features,
+                        selection,
                         cluerun.ClueConfig(
                             algorithm=algorithm,
                             distanceMetric=distanceMetric,
@@ -284,9 +333,9 @@ class ClueGui(ClueGuiUI):
                             currentThreads=clueConfig.threads,
                             currentStandardize=clueConfig.standardize,
                             currentUseFeatures=clueConfig.useFeatures,
-                            currentFeaturesFile=clueRound.featureSelectionFile or "",
-                            currentSelectionFile=clueRound.clusterSelectionFile or "",
-                            currentRoundName=name
+                            currentRoundName=name,
+                            currentFeatures=clueRound.featureSelection,
+                            currentSelection=clueRound.clusterSelection
                         )
 
                     # Create the new button in the round section of the UI
@@ -314,8 +363,8 @@ class ClueGui(ClueGuiUI):
                 # Update the round in the run
                 self.clueRun.setRound(
                     name,
-                    featureFile,
-                    selectionFile,
+                    features,
+                    selection,
                     cluerun.ClueConfig(
                         algorithm=algorithm,
                         distanceMetric=distanceMetric,
@@ -331,6 +380,7 @@ class ClueGui(ClueGuiUI):
                     )
                 )
 
+            Logger.log("Round Selection set to: ", self.clueRun.getRound(name).clusterSelection)
             popup.destroy()
 
         tk.Button(popup, text="OK", command=onOk).grid(row=2, column=0, padx=5, pady=10)
@@ -380,9 +430,9 @@ class ClueGui(ClueGuiUI):
                 currentThreads=clueConfig.threads,
                 currentStandardize=clueConfig.standardize,
                 currentUseFeatures=clueConfig.useFeatures,
-                currentFeaturesFile=clueRound.featureSelectionFile or "",
-                currentSelectionFile=clueRound.clusterSelectionFile or "",
-                currentRoundName=_round
+                currentRoundName=_round,
+                currentFeatures=clueRound.featureSelection,
+                currentSelection=clueRound.clusterSelection
             )
 
         # Create a button for the existing round
@@ -653,7 +703,7 @@ class ClueGui(ClueGuiUI):
             newName = runNameVar.get() or "Run1"
             inputFile = self.builder.get_object("input_file_entry", self.mainwindow).get()
             directory = self.builder.get_object("directory_entry", self.mainwindow).get()
-            clueclustLocation = self.builder.get_object("clueclust_entry", self.mainwindow).get()
+            clueclustLocation = self.clueclustLocation
             self.clueRun = cluerun.ClueRun(
                 newName,
                 str(inputFile),

@@ -1,3 +1,4 @@
+import ast
 import os
 import xml.etree.ElementTree as ET
 from core.cluerun import ClueRun, ClueRound, ClueConfig
@@ -40,27 +41,34 @@ def clueround_to_xml(round_obj):
         ET.SubElement(elem, "directory").text = directory
     except ValueError:
         ET.SubElement(elem, "directory").text = str(round_obj.directory)
-    try: 
-        featureSelectionFile = os.path.relpath(round_obj.featureSelectionFile)
-        ET.SubElement(elem, "featureSelectionFile").text = featureSelectionFile
-    except ValueError:
-        ET.SubElement(elem, "featureSelectionFile").text = str(round_obj.featureSelectionFile)
-    try: 
-        clusterSelectionFile = os.path.relpath(round_obj.clusterSelectionFile)
-        ET.SubElement(elem, "clusterSelectionFile").text = clusterSelectionFile
-    except ValueError:
-        ET.SubElement(elem, "clusterSelectionFile").text = str(round_obj.clusterSelectionFile)
+    ET.SubElement(elem, "featureSelection").text = str(round_obj.featureSelection)
+    ET.SubElement(elem, "clusterSelection").text = str(round_obj.clusterSelection)
     elem.append(clueconfig_to_xml(round_obj.clueConfig))
     return elem
 
 def clueround_from_xml(elem):
     roundName = elem.find("roundName").text
     directory = elem.find("directory").text
-    featureSelectionFile = elem.find("featureSelectionFile").text
-    clusterSelectionFile = elem.find("clusterSelectionFile").text
+    clusterSelectionText = elem.find("clusterSelection").text
+    featureSelectionText = elem.find("featureSelection").text
+
+    try: 
+        if clusterSelectionText and clusterSelectionText != "None":
+            clusterSelection = ast.literal_eval(clusterSelectionText)
+        else:
+            clusterSelection = None
+    except (ValueError, SyntaxError):
+        clusterSelection = None
+    try: 
+        if featureSelectionText and featureSelectionText != "None":
+            featureSelection = ast.literal_eval(featureSelectionText)
+        else:
+            featureSelection = None
+    except (ValueError, SyntaxError):
+        featureSelection = None
     config_elem = elem.find("ClueConfig")
     clueConfig = clueconfig_from_xml(config_elem)
-    return ClueRound(roundName, directory, featureSelectionFile, clusterSelectionFile, clueConfig)
+    return ClueRound(roundName, directory, featureSelection, clusterSelection, clueConfig)
 
 def cluerun_to_xml(run_obj):
     elem = ET.Element("ClueRun")

@@ -10,8 +10,8 @@
     <ClueRound>
       <roundName>KMeans_1</roundName>
       <directory>Demos/Demo_Run_1</directory>
-      <featureSelectionFile />
-      <clusterSelectionFile />
+      <featureSelection>[]</featureSelection>
+      <clusterSelection>{}</clusterSelection>
       <ClueConfig>
         <algorithm>3</algorithm>
         <distanceMetric>1</distanceMetric>
@@ -29,8 +29,8 @@
     <ClueRound>
       <roundName>DBSCAN_1</roundName>
       <directory>Demos/Demo_Run_1</directory>
-      <featureSelectionFile />
-      <clusterSelectionFile>Demo/demo_1_selection.csv</clusterSelectionFile>
+      <featureSelection>[]</featureSelection>
+      <clusterSelection>{'OVER': 500, 'UNDER': 3000, 'IN': ['1', '4'], 'NOTIN': []}</clusterSelection>
       <ClueConfig>
         <algorithm>1</algorithm>
         <distanceMetric>2</distanceMetric>

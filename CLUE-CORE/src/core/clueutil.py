@@ -240,6 +240,38 @@ class InputFilter:
         Static class for filtering input data based on feature and cluster selections. Also filters based on clusters found and metadata from previous round.
     """
 
+    commandsDict = {
+            "OVER": {
+                "description": "Keep clusters with size over specified value",
+                "ifApply": lambda val: val is not None,
+                "func": lambda df, val: df.loc[df["Size"] > int(val)] if val is not None else df,
+                "operator": lambda df1, df2: df1.loc[df1["ClusterId"].isin(list(set(df1["ClusterId"]) & set(df2["ClusterId"])))],
+                "type": int
+            },
+            "UNDER": {
+                "description": "Keep clusters with size under specified value",
+                "ifApply": lambda val: val is not None,
+                "func": lambda df, val: df.loc[df["Size"] < int(val)] if val is not None else df,
+                "operator": lambda df1, df2: df1.loc[df1["ClusterId"].isin(list(set(df1["ClusterId"]) & set(df2["ClusterId"])))],
+                "type": int
+
+            },
+            "IN": {
+                "description": "Keep only clusters with specified IDs",
+                "ifApply": lambda val: bool(val),
+                "func": lambda df, val: df.loc[df["ClusterId"].isin(map(int, val))] if val else df,
+                "operator": lambda df1, df2: df1.loc[df1["ClusterId"].isin(list(set(df1["ClusterId"]) & set(df2["ClusterId"])))],
+                "type": list
+            },
+            "NOTIN": {
+                "description": "Remove clusters with specified IDs",
+                "ifApply": lambda val: bool(val),
+                "func": lambda df, val: df.loc[~df["ClusterId"].isin(map(int, val))] if val else df,
+                "operator": lambda df1, df2: df1.loc[df1["ClusterId"].isin(list(set(df1["ClusterId"]) - set(df2["ClusterId"])))],
+                "type": list
+            }
+        }
+
     @staticmethod
     def filterSelection(commands, metadataDF):
         """
@@ -252,25 +284,23 @@ class InputFilter:
                 NOTIN:<id1,id2,...> - Remove clusters with IDs in the list
             Example: [["OVER", "10"], ["NOTIN", "1,2,3"]]
             Returns a filtered dataframe containing only the clusters that match the selection criteria.
-        """
+        """        
         ClueLogger.logToFileOnly("filterSelection called")
-        inclusionUsed = False
-        filteredDF = metadataDF
-        for command in commands:
-            if (command[0] == "OVER"): #Over cluster size
-                filteredDF = filteredDF.loc[filteredDF["Size"] > int(command[1])]
-            if (command[0] == "UNDER"): #Under cluster size
-                filteredDF = filteredDF.loc[filteredDF["Size"] < int(command[1])]
-            if (command[0] == "IN"): #Direct cluster inclusion
-                filteredDF = filteredDF.loc[filteredDF["ClusterId"].isin(map(int, command[1].split(",")))]
-                inclusionUsed = True
-            if (command[0] == "NOTIN"): #Direct cluster exclusion
-                ClueLogger.log("Excluding clusters:", command[1].split(','))
-                ClueLogger.log("ClusterId values before exclusion:", len(filteredDF['ClusterId'].unique()))
-                droppingIds = list(map(int, command[1].split(',')))
-                filteredDF = filteredDF[~filteredDF['ClusterId'].isin(droppingIds)]
-                ClueLogger.log("ClusterId values after exclusion:", filteredDF['ClusterId'].unique().tolist())
 
+        inclusionUsed = False
+        accDF = metadataDF
+        for command, values in commands.items():
+            if command in InputFilter.commandsDict:
+                if not InputFilter.commandsDict[command]["ifApply"](values):
+                    continue
+                filteredDF = InputFilter.commandsDict[command]["func"](metadataDF, values)
+                accDF = InputFilter.commandsDict[command]["operator"](accDF, filteredDF)
+                if command == "IN":
+                    inclusionUsed = True
+                ClueLogger.log("Clusters in accDF after command '{}': {}".format(command, len(accDF)))
+            else:
+                ClueLogger.log(f"Warning: Unknown command '{command[0]}' ignored in selection filtering.")
+        filteredDF = accDF
         # Noise has to be explicitly included, if no inclusion command was used remove noise.
         if not inclusionUsed:
             filteredDF = filteredDF.loc[filteredDF["ClusterId"] != -1]
@@ -280,7 +310,7 @@ class InputFilter:
         return filteredDF
 
     @staticmethod
-    def filter(inputDF, clustersFD, metadataFD, featuresFD, selectionFD):
+    def filter(inputDF, clustersFD, metadataFD, features: list, selectionCommands: dict):
         """
             Filters the input dataframe based on the features file and the clusters and metadata files.
             If no features file is provided or if it is empty, all features are kept.
@@ -290,27 +320,15 @@ class InputFilter:
             Returns a filtered dataframe containing only the selected features and clusters.
         """
         ClueLogger.logToFileOnly("filter called")
-
-        #If no feature file or if feature file is empty, accept all features
-        noFeatures = False
-        if featuresFD:
-            try:
-                featuresDF = pd.read_csv(featuresFD, header=0)
-            except pd.errors.EmptyDataError:
-                ClueLogger.log("Features file is empty, accepting all features...")
-                noFeatures = True
-        else:
-            ClueLogger.log("No features file provided, accepting all features...")
-            noFeatures = True
-        
+    
         selectedColumns = []
         selectedFeatures = None
-        if (noFeatures):
+        if not features:
             selectedFeatures = inputDF
         #Otherwise filter based on feature selection
         else:
             for f1_i in range(len(inputDF.columns.array)):
-                for f2 in featuresDF:
+                for f2 in features:
                     if (inputDF.columns[f1_i] == f2):
                         selectedColumns.append(f2)
             selectedFeatures = inputDF[selectedColumns]
@@ -324,14 +342,8 @@ class InputFilter:
             if (clustersDF.empty or metadataDF.empty):
                 ClueLogger.log("Either cluster or metadata file is empty, meaning no clusters were found in the previous round, stopping run...")
                 raise ClueException("Clusters or metadata file is empty, cannot filter input")
-            if (selectionFD):
-                selectionFile = open(selectionFD)
-                commands = []
-                for line in selectionFile:
-                    command = line.rstrip().split(":")
-                    commands.append(command)
-                selectionFile.close()
-                filteredSelectionDF = InputFilter.filterSelection(commands, metadataDF)
+            if selectionCommands:
+                filteredSelectionDF = InputFilter.filterSelection(selectionCommands, metadataDF)
                 filteredClustersDF = clustersDF.loc[clustersDF.iloc[:, 1].isin(map(int, filteredSelectionDF["ClusterId"]))]
                 
                 nextInput = nextInput.loc[nextInput["ID"].isin(filteredClustersDF.iloc[:, 0].array)]

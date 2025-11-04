@@ -150,8 +150,8 @@ class ClueRound:
         roundName: Name identifier for this round
         directory: Base directory of the global run
         clueConfig: Configuration settings for the clustering subprocess
-        featureSelectionFile: Path to feature selection file for this round
-        clusterSelectionFile: Path to cluster selection file for this round
+        featureSelection: List or str of selected features for this round
+        clusterSelection: Dict or str of cluster commands for this round
 
     Properties:
         inputFile: Path to input data file for this clustering round
@@ -163,16 +163,18 @@ class ClueRound:
     def __init__(self, 
                  roundName: str, 
                  directory: str, 
-                 featureSelectionFile: str, 
-                 clusterSelectionFile: str,
+                 featureSelection,
+                 clusterSelection,
                  clueConfig: ClueConfig,
                  ):
         # Initialize all instance attributes with type hints
         self.roundName: Optional[str] = None
         self.directory: Optional[str] = None
         self.clueConfig: Optional[ClueConfig] = None
-        self.featureSelectionFile: str = ""
-        self.clusterSelectionFile: str = ""
+        if (type(featureSelection) is not str and type(featureSelection) is not list and featureSelection is not None):
+            raise clueutil.ClueException("featureSelection must be a string or list of strings.")
+        if (type(clusterSelection) is not str and type(clusterSelection) is not dict and clusterSelection is not None):
+            raise clueutil.ClueException("clusterSelection must be a string or dictionary.")
 
         self._roundDirectory: Optional[str] = None
         self._inputFile: Optional[str] = None
@@ -182,8 +184,8 @@ class ClueRound:
         # Set initial round settings
         self.setRound(roundName, 
                       directory, 
-                      featureSelectionFile, 
-                      clusterSelectionFile,
+                      featureSelection, 
+                      clusterSelection,
                       clueConfig)
         
     @property
@@ -201,13 +203,82 @@ class ClueRound:
     @property
     def roundDirectory(self) -> str:
         return self._roundDirectory
+    
+    @property
+    def featureSelection(self) -> list:
+        return self._featureSelection
+    
+    @property
+    def clusterSelection(self) -> dict:
+        return self._clusterSelection
+
+    def setFeatureSelection(self, featureSelection):
+        """
+            Sets the feature selection for this round.
+        """
+        Logger.logToFileOnly("setFeatureSelection called")
+        self._featureSelection = self.parseFeatureSelection(featureSelection)
+
+    def setClusterSelection(self, clusterSelection):
+        """
+            Sets the cluster selection for this round.
+        """
+        Logger.logToFileOnly("setClusterSelection called")
+        self._clusterSelection = self.parseClusterSelection(clusterSelection)
         
+    def parseFeatureSelection(self, featureSelection):
+        """
+            Parses the feature selection input into a list of features.
+        """
+        Logger.logToFileOnly("parseFeatureSelection called")
+        if type(featureSelection) is str:
+            featuresFile = str(Path(featureSelection).resolve())
+            try:
+                featuresDF = pd.read_csv(featuresFile, header=0)
+                features = featuresDF.iloc[:, 0].tolist()
+                return features
+            except pd.errors.EmptyDataError:
+                Logger.log("Features file is empty, accepting all features...")
+                return []
+        elif type(featureSelection) is list:
+            return featureSelection
+        else:
+            return []
+        
+    def parseClusterSelection(self, clusterSelection):
+        """
+            Parses the cluster selection input into a dictionary of selection commands.
+        """
+        Logger.logToFileOnly("parseClusterSelection called")
+        selectionCommands = {}
+        if type(clusterSelection) is str:
+            selectionFile = str(Path(clusterSelection).resolve())
+            try:
+                with open(selectionFile, 'r') as file:
+                    for line in file:
+                        command = line.rstrip().split(":")
+                        args = []
+                        for i in command[1].split(","):
+                            args.append(i.strip())
+                        selectionCommands[command[0].strip()] = args
+                return selectionCommands
+            except FileNotFoundError:
+                Logger.log("Cluster selection file not found, no clusters will be selected.")
+                return {}
+            except pd.errors.EmptyDataError:
+                Logger.log("Cluster selection file is empty, no clusters will be selected.")
+                return {}
+        elif type(clusterSelection) is dict:
+            return clusterSelection
+        else:
+            return {}
+
     #Change all round settings in the given round
     def setRound(self, 
                  roundName, 
                  directory, 
-                 featureSelectionFile, 
-                 clusterSelectionFile, 
+                 featureSelection, 
+                 clusterSelection, 
                  clueConfig):
         """
             Sets or updates the round settings.
@@ -216,14 +287,8 @@ class ClueRound:
         self.roundName = roundName
         self.directory = str(Path(directory).resolve())
         self._roundDirectory = self.directory + "/" + roundName + "/"
-        if featureSelectionFile:
-            self.featureSelectionFile = str(Path(featureSelectionFile).resolve())
-        else:
-            self.featureSelectionFile = ""
-        if clusterSelectionFile:
-            self.clusterSelectionFile = str(Path(clusterSelectionFile).resolve())
-        else:
-            self.clusterSelectionFile = ""
+        self._featureSelection = self.parseFeatureSelection(featureSelection)
+        self._clusterSelection = self.parseClusterSelection(clusterSelection)
         self.clueConfig = clueConfig
 
         #TODO Fix inconsistency in managing file descriptors
@@ -382,8 +447,8 @@ class ClueRound:
         Logger.log("Input File: " + self._inputFile)
         Logger.log("Clusters File: " + self._roundDirectory + self._clustersFile)
         Logger.log("Metadata File: " + self._roundDirectory + self._metadataFile)
-        Logger.log("Feature Selection File: " + str(self.featureSelectionFile))
-        Logger.log("Cluster Selection File: " + str(self.clusterSelectionFile))
+        Logger.log("Selected Features: " + str(self.featureSelection))
+        Logger.log("Selected Clusters: " + str(self.clusterSelection))
 
         if ClueCancellation.isCancellationRequested():
             raise clueutil.ClueCancelledException("Run Cancelled: The CLUE round was cancelled before it could start.")
@@ -525,19 +590,19 @@ class ClueRun:
         CLUECLUSTRP = str(Path(path).resolve())
         self.CLUECLUST = CLUECLUSTRP or self.DEFAULT_JAR_PATH
 
-    def buildRound(self, roundName, featuresFile, selectionFile, clueConfig):
+    def buildRound(self, roundName, features, selection, clueConfig):
         """
             Builds a new round and appends it to the list of rounds to be ran.
         """
         Logger.logToFileOnly("buildRound called")
         self.rounds.append(ClueRound(roundName, 
                                      self._targetRunDirectory, 
-                                     featuresFile, 
-                                     selectionFile,
+                                     features, 
+                                     selection,
                                      clueConfig
                                      ))
-    
-    def setRound(self, roundName, featureSelectionFile, clusterSelectionFile, clueConfig):
+
+    def setRound(self, roundName, featureSelection, clusterSelection, clueConfig):
         """
             Sets or updates the round settings for an existing round by name.
         """
@@ -546,8 +611,8 @@ class ClueRun:
             if (round.roundName == roundName):
                 round.setRound(roundName, 
                                self._targetRunDirectory,
-                               featureSelectionFile, 
-                               clusterSelectionFile,
+                               featureSelection,
+                               clusterSelection,
                                clueConfig)
                 return
 
@@ -784,7 +849,7 @@ class ClueRun:
                 newInputs = clueutil.InputFilter.filter(currentDF, 
                                                         None, #No previous metadata FD
                                                         None, #No previous clusters FD
-                                                        self.rounds[0].featureSelectionFile, 
+                                                        self.rounds[0].featureSelection, 
                                                         None  #No cluster selection file for first round
                                             )
                 newInputs = newInputs.reset_index(drop=True) #Reset index to ensure it is sequential from 0
@@ -811,9 +876,12 @@ class ClueRun:
                 newInputs = clueutil.InputFilter.filter(currentDF, 
                                                         prevClustersFD, 
                                                         prevMetadataFD, 
-                                                        currRound.featureSelectionFile, 
-                                                        currRound.clusterSelectionFile)
+                                                        currRound.featureSelection, 
+                                                        currRound.clusterSelection)
                 newInputs = newInputs.reset_index(drop=True) #Reset index to ensure it is sequential from 0
+                #TODO Does not filter properly FIX
+                for key in currRound.clusterSelection.keys():
+                    Logger.log(f" - {key}: {currRound.clusterSelection[key]}")
                 Path(currRound.roundDirectory).mkdir(exist_ok=True)
                 newInputs.to_csv(path_or_buf=currRound.inputFile, header=False, index=False)
                 currRound.runRound(self.CLUECLUST)
